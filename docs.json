@@ -97,7 +97,8 @@
               "api/providers/anthropic",
               "api/providers/gemini",
               "api/providers/openrouter",
-              "api/providers/mistral"
+              "api/providers/mistral",
+              "api/providers/togetherai"
             ]
           }
         ]

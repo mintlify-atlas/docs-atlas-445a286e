@@ -1,0 +1,142 @@
+---
+title: TogetherAI Provider
+description: Access Meta Llama, Qwen, and Mistral models through TogetherAI's unified API
+---
+
+TogetherAI provides access to open-source models including Meta Llama vision models, Qwen, and Mistral models through a unified API.
+
+## Configuration
+
+Set your TogetherAI API key in your `.env` file:
+
+```bash
+TOGETHERAI_API_KEY=your_api_key_here
+```
+
+The API key is configured in `config/llm-magic.php`:
+
+```php
+'apis' => [
+    'togetherai' => [
+        'token' => env('TOGETHERAI_API_KEY'),
+    ],
+],
+```
+
+## Available Models
+
+TogetherAI offers several open-source models:
+
+### Meta Llama 3.2 Vision Models
+
+- **meta-llama/Llama-3.2-3B-Vision-Instruct-Turbo** - Compact vision model (3B parameters)
+- **meta-llama/llama-3.2-11b-vision-instruct-turbo** - Medium vision model (11B parameters)
+- **meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo** - Large vision model (90B parameters)
+
+### Meta Llama 3.1 Models
+
+- **meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo** - Fast instruction-following model
+
+### Qwen Models
+
+- **Qwen/Qwen2.5-7B-Instruct-Turbo** - Alibaba's Qwen model optimized for instruction following
+
+### Mistral Models
+
+- **mistralai/Mixtral-8x7B-Instruct-v0.1** - Mixtral mixture-of-experts model
+
+## Usage
+
+### Using String Identifier
+
+```php
+use Mateffy\Magic;
+
+$response = Magic::chat()
+    ->model('togetherai/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo')
+    ->prompt('Explain quantum computing')
+    ->stream();
+```
+
+### Using Constructor
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Models\TogetherAI;
+
+$response = Magic::chat()
+    ->model(new TogetherAI('meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo'))
+    ->prompt('Explain quantum computing')
+    ->stream();
+```
+
+### Using Constants
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Models\TogetherAI;
+
+$response = Magic::chat()
+    ->model(new TogetherAI(TogetherAI::META_LLAMA_3_1_8B_INSTRUCT_TURBO))
+    ->prompt('Explain quantum computing')
+    ->stream();
+```
+
+## Vision Models
+
+TogetherAI's Llama 3.2 models support vision inputs:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+$response = Magic::chat()
+    ->model('togetherai/meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo')
+    ->messages([
+        Step::user([
+            Step\Text::make('What objects are in this image?'),
+            Step\Image::url('https://example.com/image.jpg'),
+        ]),
+    ])
+    ->send();
+```
+
+## Model Constants
+
+All available model constants from the `TogetherAI` class:
+
+- `TogetherAI::META_LLAMA_3_2_3B_VISION_INSTRUCT_TURBO`
+- `TogetherAI::META_LLAMA_3_2_11B_VISION_INSTRUCT_TURBO`
+- `TogetherAI::META_LLAMA_3_2_90B_VISION_INSTRUCT_TURBO`
+- `TogetherAI::META_LLAMA_3_1_8B_INSTRUCT_TURBO`
+- `TogetherAI::OWEN_QWEN2_5_7B_INSTRUCT_TURBO`
+
+## Advanced Options
+
+Configure model behavior using `ElElEmOptions`:
+
+```php
+use Mateffy\Magic\Models\TogetherAI;
+use Mateffy\Magic\Models\Options\ElElEmOptions;
+
+$model = new TogetherAI(
+    model: TogetherAI::META_LLAMA_3_1_8B_INSTRUCT_TURBO,
+    options: new ElElEmOptions(
+        temperature: 0.7,
+        maxTokens: 1000,
+        topP: 0.9,
+    )
+);
+```
+
+## Organization
+
+- **Provider**: TogetherAI
+- **Website**: [together.ai](https://together.ai)
+- **API Documentation**: [docs.together.ai](https://docs.together.ai)
+
+## See Also
+
+- [Chat API](/chat)
+- [Model Selection](/models)
+- [OpenRouter Provider](/api/providers/openrouter) - Alternative unified API access

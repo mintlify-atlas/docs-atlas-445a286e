@@ -1,0 +1,128 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "LLM Magic",
+  "projectDescription": "LLM-agnostic AI toolkit for Laravel with chat, extraction, and embeddings support",
+  "theme": "palm",
+  "primaryColor": "#7C3AED",
+  "lightColor": "#A78BFA",
+  "darkColor": "#5B21B6",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart",
+              "configuration"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "chat",
+              "extraction",
+              "embeddings",
+              "streaming"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "tools",
+              "strategies",
+              "models",
+              "livewire-integration"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/simple-questions",
+              "guides/multimodal-chat",
+              "guides/document-extraction",
+              "guides/custom-tools",
+              "guides/custom-strategies"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/magic",
+              "api/chat-builder",
+              "api/extraction-builder",
+              "api/embeddings-builder"
+            ]
+          },
+          {
+            "group": "Messages",
+            "pages": [
+              "api/messages",
+              "api/steps"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "api/tools/tool",
+              "api/tools/prebuilt",
+              "api/tools/eloquent"
+            ]
+          },
+          {
+            "group": "Models & Providers",
+            "pages": [
+              "api/providers/openai",
+              "api/providers/anthropic",
+              "api/providers/gemini",
+              "api/providers/openrouter",
+              "api/providers/mistral"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-provider LLM support (OpenAI, Anthropic, Gemini, Mistral, OpenRouter)",
+    "Fluent chat API with tool calling and streaming",
+    "Document extraction from PDFs, Word docs, images, and spreadsheets",
+    "Multiple extraction strategies (simple, sequential, parallel, double-pass)",
+    "Native Laravel integration with Livewire support",
+    "Type-safe structured data extraction with JSON Schema validation",
+    "Embeddings generation for RAG applications",
+    "Pre-built tools including Eloquent CRUD operations"
+  ],
+  "publicApiSurface": [
+    "Magic::ask()",
+    "Magic::chat()",
+    "Magic::extract()",
+    "Magic::embeddings()",
+    "Magic::function()",
+    "Magic::models()",
+    "Magic::error()",
+    "ChatPreconfiguredModelBuilder",
+    "ExtractionLLMBuilder",
+    "EmbeddingsBuilder",
+    "Tool::make()",
+    "Step::user()",
+    "Step::assistant()",
+    "TextMessage",
+    "DataMessage",
+    "Image",
+    "Text",
+    "ToolResult",
+    "SimpleStrategy",
+    "SequentialStrategy",
+    "ParallelStrategy",
+    "DoublePassStrategy"
+  ]
+}

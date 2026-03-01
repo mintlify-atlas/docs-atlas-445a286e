@@ -1,0 +1,394 @@
+---
+title: 'Building Custom Tools'
+description: 'Create custom tools with callbacks to extend LLM capabilities'
+---
+
+## Overview
+
+Tools allow LLMs to perform actions and access external data. LLM Magic makes it easy to create custom tools using closures with automatic parameter inference.
+
+## Basic Tool Creation
+
+<Steps>
+  <Step title="Define a tool with a closure">
+    Create a tool by passing a closure to the `tools()` method:
+
+    ```php
+    use Mateffy\Magic;
+
+    $messages = Magic::chat()
+        ->model('google/gemini-2.0-flash-lite')
+        ->messages([
+            \Mateffy\Magic\Chat\Messages\TextMessage::user('What is 5 + 3?')
+        ])
+        ->tools([
+            'add' => fn (int $a, int $b) => $a + $b,
+        ])
+        ->send();
+    ```
+  </Step>
+
+  <Step title="LLM uses the tool">
+    The LLM will automatically call your tool when needed:
+
+    ```php
+    // The LLM calls: add(5, 3)
+    // Tool returns: 8
+    // LLM responds: "The answer is 8."
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  LLM Magic automatically generates JSON Schema from your closure's type hints. No manual schema definition needed!
+</Note>
+
+## Tool Definition Methods
+
+### Using Closures
+
+The simplest approach with automatic schema generation:
+
+```php
+Magic::chat()
+    ->tools([
+        'getCurrentWeather' => function (string $location, string $unit = 'celsius') {
+            // Your implementation
+            return [
+                'temperature' => 22,
+                'unit' => $unit,
+                'condition' => 'sunny',
+            ];
+        },
+    ])
+```
+
+### Using MagicTool Class
+
+For more control, use the `MagicTool` class from src/Magic/Tools/MagicTool.php:
+
+```php
+use Mateffy\Magic\Tools\MagicTool;
+
+$tool = new MagicTool(
+    name: 'search_flight',
+    schema: [
+        'type' => 'object',
+        'description' => 'Search for flights between airports',
+        'properties' => [
+            'from_airport_code' => [
+                'type' => 'string',
+                'description' => 'Departure airport code (ISO 3166-1 alpha-3)',
+            ],
+            'to_airport_code' => [
+                'type' => 'string',
+                'description' => 'Destination airport code (ISO 3166-1 alpha-3)',
+            ],
+        ],
+        'required' => ['from_airport_code', 'to_airport_code'],
+    ],
+    callback: function (string $from_airport_code, string $to_airport_code) {
+        return app(FlightService::class)
+            ->search($from_airport_code, $to_airport_code)
+            ->toArray();
+    }
+);
+
+Magic::chat()->tools([$tool]);
+```
+
+## Real-World Example
+
+From README.md, here's a complete example with a flight search tool:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+use Mateffy\Magic\Chat\Tool;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->temperature(0.5)
+    ->messages([
+        Step::user([
+            Step\Text::make('What is in this picture and where was it taken?'),
+            Step\Image::make('https://example.com/eiffel-tower.jpg'),
+        ]),
+        Step::assistant([
+            Step\Text::make('The picture shows the Eiffel Tower, which is located in Paris, France.'),
+        ]),
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->tools([
+        Tool::make('search_flight')
+            ->description('Search for flights to a given destination. Pass the departure airport code and the destination airport code in the ISO 3166-1 alpha-3 format.')
+            ->callback(fn (string $from_airport_code, string $to_airport_code) {
+                return app(FlightService::class)
+                    ->search($from_airport_code, $to_airport_code)
+                    ->toArray();
+            }),
+    ]);
+```
+
+## Schema Generation
+
+From src/Magic/Tools/ToolProcessor.php, LLM Magic automatically generates schemas from PHP type hints:
+
+### Type Mapping
+
+PHP types are mapped to JSON Schema types:
+
+- `string` → `"string"`
+- `int` → `"integer"`
+- `float` → `"number"`
+- `bool` → `"boolean"`
+- `array` → `"array"`
+- `object` → `"object"`
+
+### Example with Type Hints
+
+```php
+Magic::chat()
+    ->tools([
+        'processOrder' => function (
+            string $orderId,
+            int $quantity,
+            float $price,
+            bool $express = false
+        ) {
+            // Function body
+        },
+    ])
+```
+
+Generates:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "orderId": {"type": "string"},
+    "quantity": {"type": "integer"},
+    "price": {"type": "number"},
+    "express": {"type": "boolean"}
+  },
+  "required": ["orderId", "quantity", "price"]
+}
+```
+
+<Note>
+  Optional parameters (with default values) are not included in the `required` array.
+</Note>
+
+## Adding Descriptions
+
+Use docblock annotations to add descriptions:
+
+```php
+/**
+ * @description Search for products in the catalog
+ * @description $query The search query string
+ * @description $limit Maximum number of results to return
+ */
+$searchProducts = function (string $query, int $limit = 10) {
+    // Implementation
+};
+
+Magic::chat()->tools(['searchProducts' => $searchProducts]);
+```
+
+From src/Magic/Tools/ToolProcessor.php:140, the `@description` annotation is parsed and added to the schema.
+
+## Custom JSON Schema Types
+
+For complex types, use the `@type` docblock annotation:
+
+```php
+/**
+ * @type $filters {"type": "object", "properties": {"category": {"type": "string"}, "minPrice": {"type": "number"}}}
+ */
+$searchWithFilters = function (string $query, array $filters) {
+    // Implementation
+};
+```
+
+From src/Magic/Tools/ToolProcessor.php:158
+
+## Tool Execution
+
+### Accessing Tool Call Data
+
+Your callback receives the arguments and optionally the `ToolCall` object:
+
+```php
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+Magic::chat()
+    ->tools([
+        'logEvent' => function (string $event, ToolCall $call) {
+            // Access call metadata
+            logger()->info('Tool called', [
+                'tool' => $call->name,
+                'arguments' => $call->arguments,
+                'id' => $call->id,
+            ]);
+            
+            return ['status' => 'logged'];
+        },
+    ])
+```
+
+From src/Magic/Tools/MagicTool.php:38, the callback is executed with both arguments and the call object.
+
+### Error Handling
+
+Throw exceptions to signal errors to the LLM:
+
+```php
+Magic::chat()
+    ->tools([
+        'getUser' => function (int $userId) {
+            $user = User::find($userId);
+            
+            if (!$user) {
+                throw Magic::error(
+                    "User not found with ID: {$userId}",
+                    code: 'USER_NOT_FOUND'
+                );
+            }
+            
+            return $user->toArray();
+        },
+    ])
+```
+
+From src/Magic.php:165, `Magic::error()` creates a `ToolCallException`.
+
+## Advanced Patterns
+
+### Laravel Service Integration
+
+```php
+Magic::chat()
+    ->tools([
+        'createBooking' => function (string $date, int $guests) {
+            return app(BookingService::class)
+                ->create($date, $guests)
+                ->toArray();
+        },
+    ])
+```
+
+### Database Queries
+
+From EXAMPLES.md:
+
+```php
+Magic::chat()
+    ->tools([
+        'findFileInDownloads' => function (string $search) {
+            $files = Storage::disk('downloads')->allFiles();
+            
+            return [
+                'files' => $files
+            ];
+        },
+    ])
+```
+
+### Returning Complex Data
+
+```php
+Magic::chat()
+    ->tools([
+        'analyzeData' => function (array $dataPoints) {
+            return [
+                'mean' => array_sum($dataPoints) / count($dataPoints),
+                'min' => min($dataPoints),
+                'max' => max($dataPoints),
+                'count' => count($dataPoints),
+            ];
+        },
+    ])
+```
+
+## Tool Choice
+
+Control when tools are used:
+
+### Auto (Default)
+
+LLM decides when to use tools:
+
+```php
+Magic::chat()
+    ->tools($tools)
+    ->toolChoice('auto')  // Default
+```
+
+### Force Tool Usage
+
+Require the LLM to use a tool:
+
+```php
+Magic::chat()
+    ->tools($tools)
+    ->forceTool()  // Must use a tool
+```
+
+### Force Specific Tool
+
+```php
+Magic::chat()
+    ->tools($tools)
+    ->toolChoice('search_flight')  // Must use this specific tool
+```
+
+From src/Magic/Builder/Concerns/HasTools.php:78
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Schema Design">
+    - Use specific type hints for better schema generation
+    - Add `@description` annotations for clarity
+    - Make required parameters non-optional
+    - Return structured data (arrays/objects)
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    - Use `Magic::error()` for tool-specific errors
+    - Provide clear error messages
+    - Include error codes for categorization
+    - Let exceptions propagate for system errors
+  </Accordion>
+
+  <Accordion title="Performance">
+    - Keep tool execution fast
+    - Cache results when possible
+    - Use async operations for slow APIs
+    - Log tool usage for debugging
+  </Accordion>
+
+  <Accordion title="Security">
+    - Validate all tool inputs
+    - Use authorization checks
+    - Never expose sensitive data
+    - Rate limit expensive operations
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Tool callbacks have access to your application's service container. Always validate inputs and implement proper authorization.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multimodal Chat" icon="image" href="/guides/multimodal-chat">
+    Combine tools with image-based conversations
+  </Card>
+  <Card title="Custom Strategies" icon="puzzle-piece" href="/guides/custom-strategies">
+    Build custom extraction strategies
+  </Card>
+</CardGroup>

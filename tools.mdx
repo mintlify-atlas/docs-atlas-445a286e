@@ -1,0 +1,363 @@
+---
+title: 'Tool Creation'
+description: 'Create custom tools with callbacks, validation, and prebuilt utilities'
+---
+
+## Overview
+
+LLM Magic provides a flexible tool system that allows LLMs to execute custom functions during conversations. Tools can be simple closures or complex prebuilt classes with full validation and error handling.
+
+## Creating Tools with Closures
+
+The simplest way to create a tool is using a closure. The tool system automatically introspects the function signature to generate the JSON schema.
+
+```php
+use Mateffy\Magic;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('Calculate 5 multiplied by 8')
+    ->tools([
+        'multiply' => fn (int $a, int $b) => $a * $b,
+    ])
+    ->stream();
+```
+
+### Adding Descriptions
+
+Use docblock annotations to provide descriptions for your tools and parameters:
+
+```php
+->tools([
+    'search_flight' => 
+        /**
+         * @description Search for flights to a given destination. Pass the departure airport code and the destination airport code in the ISO 3166-1 alpha-3 format.
+         * @description $from_airport_code The departure airport IATA code
+         * @description $to_airport_code The destination airport IATA code
+         */
+        function (string $from_airport_code, string $to_airport_code) {
+            return app(FlightService::class)
+                ->search($from_airport_code, $to_airport_code)
+                ->toArray();
+        },
+])
+```
+
+### Custom Type Schemas
+
+For complex types, use the `@type` annotation with JSON schema:
+
+```php
+/**
+ * @type $filters {"type": "object", "properties": {"price_max": {"type": "number"}, "airline": {"type": "string"}}}
+ */
+function (array $filters) {
+    // Implementation
+}
+```
+
+## Tool Processing
+
+The `ToolProcessor` class automatically converts PHP functions into tool definitions:
+
+<CodeGroup>
+```php ToolProcessor.php
+<?php
+
+namespace Mateffy\Magic\Tools;
+
+class ToolProcessor
+{
+    public function processFunctionTool($key, callable $tool): MagicTool
+    {
+        $reflection = new ReflectionFunction($tool);
+        $name = is_string($key) ? $key : $reflection->getName();
+
+        $schema = $this->getFunctionParameters($reflection);
+
+        if ($description = $this->getDocblockDescription($reflection)) {
+            $schema['description'] = $description;
+        }
+
+        return new MagicTool(
+            name: $name,
+            schema: $schema,
+            callback: $tool,
+        );
+    }
+
+    protected function getFunctionParameters(ReflectionFunctionAbstract $reflection): ?array
+    {
+        $schema = ['type' => 'object'];
+        $required = [];
+        $parameters = [];
+
+        foreach ($reflection->getParameters() as $param) {
+            if (!$param->isOptional()) {
+                $required[] = $param->getName();
+            }
+
+            $parameters[$param->getName()] = $this->getParameterSchema($param);
+        }
+
+        if (count($parameters) > 0) {
+            $schema['properties'] = $parameters;
+        }
+
+        if (count($required) > 0) {
+            $schema['required'] = $required;
+        }
+
+        return $schema;
+    }
+}
+```
+</CodeGroup>
+
+## InvokableTool Interface
+
+For advanced use cases, implement the `InvokableTool` interface:
+
+```php InvokableTool.php
+<?php
+
+namespace Mateffy\Magic\Tools;
+
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+interface InvokableTool
+{
+    public function name(): string;
+
+    public function schema(): array;
+
+    public function validate(array $arguments): array;
+
+    public function execute(ToolCall $call): mixed;
+}
+```
+
+## Prebuilt Tools
+
+LLM Magic includes several prebuilt tools for common operations.
+
+### Add Tool
+
+```php Add.php
+<?php
+
+namespace Mateffy\Magic\Tools\Prebuilt;
+
+use Mateffy\Magic\Chat\Messages\ToolCall;
+use Mateffy\Magic\Tools\InvokableTool;
+
+class Add implements InvokableTool
+{
+    public function name(): string
+    {
+        return 'add';
+    }
+
+    public function schema(): array
+    {
+        return [
+            'name' => 'add',
+            'description' => 'Add two numbers',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'a' => [
+                        'type' => 'number',
+                        'description' => 'The first number to add',
+                    ],
+                    'b' => [
+                        'type' => 'number',
+                        'description' => 'The second number to add',
+                    ],
+                ],
+                'required' => ['a', 'b'],
+            ],
+        ];
+    }
+
+    public function validate(array $arguments): array
+    {
+        $validator = validator($arguments, [
+            'a' => 'required|numeric',
+            'b' => 'required|numeric',
+        ]);
+
+        $validator->validate();
+
+        return $validator->validated();
+    }
+
+    public function execute(ToolCall $call): mixed
+    {
+        return $call->arguments['a'] + $call->arguments['b'];
+    }
+}
+```
+
+<Info>
+Prebuilt tools include validation using Laravel's validator for type safety.
+</Info>
+
+### Extract Tool
+
+The Extract tool is used for structured data extraction:
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Extract;
+
+$response = Magic::chat()
+    ->model('gpt-4o')
+    ->messages([TextMessage::user('Extract the name and age')])
+    ->tools([
+        'extract' => new Extract([
+            'type' => 'object',
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'age' => ['type' => 'integer'],
+            ]
+        ])
+    ])
+    ->toolChoice('extract')
+    ->stream();
+```
+
+### Eloquent Tools
+
+Generate full CRUD tools for Eloquent models:
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\EloquentTools;
+
+Magic::chat()
+    ->tools([
+        EloquentTools::crud(\App\Models\Product::class),
+    ])
+```
+
+Customize which operations are enabled:
+
+```php
+EloquentTools::crud(
+    model: \App\Models\Product::class,
+    query: true,
+    get: true,
+    create: true,
+    update: false,  // Disable updates
+    delete: false,  // Disable deletes
+)
+```
+
+<Warning>
+Be careful when exposing CRUD operations to LLMs. Consider implementing proper authorization and validation.
+</Warning>
+
+## Tool Execution Flow
+
+<Steps>
+  <Step title="Tool Call">
+    The LLM decides to call a tool and generates a `ToolCallMessage` with arguments.
+  </Step>
+  
+  <Step title="Validation">
+    Arguments are validated using the tool's `validate()` method.
+  </Step>
+  
+  <Step title="Execution">
+    The tool's `execute()` method is called with validated arguments.
+  </Step>
+  
+  <Step title="Result">
+    Output is wrapped in a `ToolResultMessage` and sent back to the LLM.
+  </Step>
+</Steps>
+
+## Error Handling
+
+Tools can throw exceptions which are automatically caught and returned to the LLM:
+
+```php
+Magic::chat()
+    ->tools([
+        'risky_operation' => function (string $input) {
+            if ($input === 'bad') {
+                throw Magic::error('Invalid input provided');
+            }
+            return ['result' => 'success'];
+        }
+    ])
+    ->onToolError(function (Throwable $e) {
+        Log::error('Tool error: ' . $e->getMessage());
+    })
+    ->stream();
+```
+
+## Tool Choice
+
+Control how the LLM uses tools:
+
+```php
+// Auto (default) - LLM decides when to use tools
+->toolChoice(ToolChoice::Auto)
+
+// Force a specific tool
+->toolChoice('extract')
+
+// Require any tool
+->forceTool(ToolChoice::Required)
+```
+
+## Advanced: MagicTool Class
+
+The core implementation of tool execution:
+
+```php MagicTool.php
+<?php
+
+namespace Mateffy\Magic\Tools;
+
+use Closure;
+use Illuminate\Container\Container;
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+class MagicTool implements InvokableTool
+{
+    public function __construct(
+        protected string $name,
+        protected array $schema,
+        protected Closure $callback,
+    ) {}
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function schema(): array
+    {
+        return $this->schema;
+    }
+
+    public function validate(array $arguments): array
+    {
+        // JSON schema validation happens here
+        return $arguments;
+    }
+
+    public function execute(ToolCall $call): mixed
+    {
+        return Container::getInstance()->call($this->callback, [
+            ...$call->arguments,
+            'call' => $call,
+        ]);
+    }
+}
+```
+
+<Note>
+Tools are executed through Laravel's service container, enabling dependency injection in tool callbacks.
+</Note>

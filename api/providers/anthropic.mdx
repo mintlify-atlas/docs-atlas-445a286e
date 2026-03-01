@@ -1,0 +1,169 @@
+---
+title: Anthropic Provider
+description: Use Anthropic's Claude models including Haiku, Sonnet, and Opus with LLM Magic
+---
+
+# Anthropic Provider
+
+The Anthropic provider gives you access to Claude models, including the efficient Haiku, balanced Sonnet, and powerful Opus variants.
+
+## Configuration
+
+### API Key Setup
+
+Set your Anthropic API key in your `.env` file:
+
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+The API key configuration is defined in `config/llm-magic.php`:
+
+```php
+'apis' => [
+    'anthropic' => [
+        'token' => env('ANTHROPIC_API_KEY'),
+    ],
+]
+```
+
+## Available Models
+
+LLM Magic supports the following Claude models:
+
+### Claude 3 Haiku
+
+- **claude-3-haiku-20240307** - Fast and cost-effective model
+- **claude-3-5-haiku-latest** - Latest Haiku 3.5 model
+
+### Claude 3 Sonnet
+
+- **claude-3-sonnet-20240229** - Balanced performance
+- **claude-3-5-sonnet-latest** - Latest Sonnet 3.5 model
+- **claude-3-5-sonnet-20241022** - Sonnet 3.5 with computer use capabilities
+- **claude-3-7-sonnet-latest** - Latest Sonnet 3.7 model
+
+### Claude 3 Opus
+
+- **claude-3-opus-latest** - Most powerful Claude model
+
+## Model Constants
+
+Use these constants for type safety:
+
+```php
+use Mateffy\Magic\Models\Anthropic;
+
+Anthropic::HAIKU                    // claude-3-haiku-20240307
+Anthropic::HAIKU_3_5                // claude-3-5-haiku-latest
+Anthropic::SONNET                   // claude-3-sonnet-20240229
+Anthropic::SONNET_3_5               // claude-3-5-sonnet-latest
+Anthropic::SONNET_3_5_COMPUTER_USE  // claude-3-5-sonnet-20241022
+Anthropic::SONNET_3_7               // claude-3-7-sonnet-latest
+Anthropic::OPUS                     // claude-3-opus-latest
+```
+
+## Usage
+
+### Using the Constructor
+
+Create an Anthropic model instance with any model name:
+
+```php
+use Mateffy\Magic\Models\Anthropic;
+use Mateffy\Magic\Models\Options\ElElEmOptions;
+
+$model = new Anthropic(
+    model: Anthropic::SONNET_3_5,
+    options: new ElElEmOptions
+);
+```
+
+### Using Static Factory Methods
+
+LLM Magic provides convenient static methods for common models:
+
+```php
+use Mateffy\Magic\Models\Anthropic;
+
+// Haiku - fastest and most cost-effective
+$model = Anthropic::haiku();
+
+// Sonnet - balanced performance
+$model = Anthropic::sonnet();
+$model = Anthropic::sonnet_3_5();
+
+// Sonnet with computer use capabilities
+$model = Anthropic::sonnet_3_5_computer_use();
+
+// Opus - most powerful
+$model = Anthropic::opus();
+```
+
+### Getting Available Models
+
+Retrieve a list of all available Anthropic models:
+
+```php
+use Mateffy\Magic\Models\Anthropic;
+
+$models = Anthropic::models();
+// Returns a Collection with prefixed model names like 'anthropic/claude-3-5-sonnet-latest'
+
+$models = Anthropic::models(prefix: null, prefixLabels: null);
+// Returns models without prefix
+```
+
+## Model Costs
+
+Anthropic models include built-in cost tracking with support for prompt caching:
+
+| Model | Input Cost (per 1M tokens) | Cache Writes | Cache Hits | Output Cost (per 1M tokens) |
+|-------|-----------|--------------|------------|-------------|
+| Claude 3.7 Sonnet | $3.00 | $3.75 | $0.30 | $15.00 |
+| Claude 3.5 Sonnet | $3.00 | $3.75 | $0.30 | $15.00 |
+| Claude 3.5 Haiku | $0.80 | $1.00 | $0.08 | $4.00 |
+| Claude 3 Haiku | $0.25 | $0.30 | $0.03 | $1.25 |
+| Claude 3 Opus | $15.00 | $18.75 | $1.50 | $75.00 |
+
+Access cost information programmatically:
+
+```php
+$model = Anthropic::sonnet_3_5();
+$cost = $model->getModelCost();
+
+if ($cost) {
+    echo "Input: {$cost->inputCentsPer1K} cents per 1K tokens";
+    echo "Output: {$cost->outputCentsPer1K} cents per 1K tokens";
+}
+```
+
+## Organization Info
+
+The Anthropic provider includes organization metadata:
+
+- **ID**: `anthropic`
+- **Name**: Anthropic
+- **Website**: https://anthropic.com
+- **Privacy**: Data may be used for model training and abuse prevention
+
+## Advanced Options
+
+You can pass additional options using `ElElEmOptions`:
+
+```php
+use Mateffy\Magic\Models\Anthropic;
+use Mateffy\Magic\Models\Options\ElElEmOptions;
+
+$options = new ElElEmOptions(
+    // Configure temperature, max tokens, etc.
+);
+
+$model = new Anthropic(Anthropic::SONNET_3_5, $options);
+```
+
+## See Also
+
+- [Configuration](/configuration/api-keys)
+- [Model Options](/api/options)
+- [Chat Completion](/guides/chat-completion)

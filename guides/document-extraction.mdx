@@ -1,0 +1,339 @@
+---
+title: 'Document Extraction'
+description: 'Extract structured data from PDFs, images, and documents using Magic::extract()'
+---
+
+## Overview
+
+`Magic::extract()` enables you to extract structured, validated JSON data from documents like PDFs, Word files, and images. It uses extraction strategies to efficiently process documents of any size.
+
+## Basic Extraction
+
+<Steps>
+  <Step title="Define your schema">
+    Create a JSON Schema describing the data you want to extract:
+
+    ```php
+    $schema = [
+        'type' => 'object',
+        'properties' => [
+            'name' => ['type' => 'string'],
+            'age' => ['type' => 'integer'],
+            'email' => ['type' => 'string', 'format' => 'email'],
+        ],
+        'required' => ['name', 'age'],
+    ];
+    ```
+  </Step>
+
+  <Step title="Prepare your artifacts">
+    Artifacts are the documents to extract from (PDFs, images, text, etc.):
+
+    ```php
+    use Mateffy\Magic\Extraction\Artifacts\Artifact;
+
+    $artifact = Artifact::fromPath('/path/to/document.pdf');
+    ```
+  </Step>
+
+  <Step title="Extract the data">
+    ```php
+    use Mateffy\Magic;
+
+    $data = Magic::extract()
+        ->schema($schema)
+        ->artifacts([$artifact])
+        ->send();
+
+    // Returns: ['name' => 'John Doe', 'age' => 25, 'email' => 'john@example.com']
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+From the README.md:
+
+```php
+use Mateffy\Magic;
+
+$data = Magic::extract()
+    ->schema([
+        'type' => 'object',
+        'properties' => [
+            'name' => ['type' => 'string'],
+            'age' => ['type' => 'integer'],
+        ],
+        'required' => ['name', 'age'],
+    ])
+    ->artifacts([$artifact])
+    ->send();
+```
+
+<Note>
+  The extracted data is automatically validated against your JSON Schema. Invalid data will trigger validation errors.
+</Note>
+
+## Extraction Strategies
+
+Strategies determine how LLM Magic processes your documents. Each strategy implements the `Strategy` interface from src/Magic/Extraction/Strategies/Strategy.php.
+
+### Available Strategies
+
+<Tabs>
+  <Tab title="Simple">
+    **SimpleStrategy** - Processes only the first chunk of artifacts.
+
+    ```php
+    $data = Magic::extract()
+        ->strategy('simple')
+        ->schema($schema)
+        ->artifacts($artifacts)
+        ->send();
+    ```
+
+    **Best for:**
+    - Single-page documents
+    - Small files that fit in one LLM call
+    - Quick prototyping
+
+    From src/Magic/Extraction/Strategies/SimpleStrategy.php:14
+  </Tab>
+
+  <Tab title="Sequential">
+    **SequentialStrategy** - Processes documents in batches sequentially, building up the result.
+
+    ```php
+    $data = Magic::extract()
+        ->strategy('sequential')
+        ->schema($schema)
+        ->artifacts($artifacts)
+        ->send();
+    ```
+
+    **Best for:**
+    - Multi-page documents
+    - Documents where order matters
+    - Building cumulative results
+
+    From src/Magic/Extraction/Strategies/SequentialStrategy.php:16
+  </Tab>
+
+  <Tab title="Parallel">
+    **ParallelStrategy** - Processes batches concurrently, then merges results with an LLM.
+
+    ```php
+    $data = Magic::extract()
+        ->strategy('parallel')
+        ->schema($schema)
+        ->artifacts($artifacts)
+        ->send();
+    ```
+
+    **Best for:**
+    - Large documents
+    - Independent sections
+    - Maximum speed
+
+    From src/Magic/Extraction/Strategies/ParallelStrategy.php:20
+  </Tab>
+
+  <Tab title="Auto-Merge Variants">
+    Auto-merge strategies automatically combine partial results:
+
+    - **sequential-auto-merge** - Sequential processing with automatic merging
+    - **parallel-auto-merge** - Parallel processing with automatic merging
+    - **double-pass** - Two-pass extraction for complex documents
+    - **double-pass-auto-merge** - Two-pass with automatic merging
+
+    ```php
+    $data = Magic::extract()
+        ->strategy('parallel-auto-merge')
+        ->schema($schema)
+        ->artifacts($artifacts)
+        ->send();
+    ```
+  </Tab>
+</Tabs>
+
+### Strategy Selection
+
+From src/Magic.php:206, all built-in strategies are registered:
+
+```php
+'simple' => SimpleStrategy::class,
+'sequential' => SequentialStrategy::class,
+'sequential-auto-merge' => SequentialAutoMergeStrategy::class,
+'parallel' => ParallelStrategy::class,
+'parallel-auto-merge' => ParallelAutoMergeStrategy::class,
+'double-pass' => DoublePassStrategy::class,
+'double-pass-auto-merge' => DoublePassStrategyAutoMerging::class,
+```
+
+## Customizing Extraction
+
+### Chunk Size
+
+Control how many pages/sections are processed in each batch:
+
+```php
+$data = Magic::extract()
+    ->chunkSize(5)  // Process 5 pages at a time
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->send();
+```
+
+### Model Selection
+
+```php
+$data = Magic::extract()
+    ->model('google/gemini-2.0-flash-lite')
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->send();
+```
+
+### Output Instructions
+
+Provide custom instructions for the extraction:
+
+```php
+$data = Magic::extract()
+    ->outputInstructions('Focus on extracting contact information. Ignore marketing content.')
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->send();
+```
+
+## Progress Tracking
+
+### Token Usage
+
+```php
+use Mateffy\Magic\Chat\TokenStats;
+
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->onTokenStats(function (TokenStats $stats) {
+        echo "Tokens used: {$stats->totalTokens}";
+    })
+    ->send();
+```
+
+### Data Progress
+
+```php
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->onDataProgress(function (array $partialData) {
+        // Called as data is extracted
+        print_r($partialData);
+    })
+    ->send();
+```
+
+### Message Progress
+
+```php
+use Mateffy\Magic\Chat\Messages\Message;
+
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->onMessageProgress(function (Message $message) {
+        // Called for each message
+        echo $message->text();
+    })
+    ->send();
+```
+
+## Complex Schemas
+
+### Nested Objects
+
+```php
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'company' => [
+            'type' => 'object',
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'founded' => ['type' => 'integer'],
+                'address' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'street' => ['type' => 'string'],
+                        'city' => ['type' => 'string'],
+                        'country' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ],
+    ],
+];
+```
+
+### Arrays of Items
+
+```php
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'employees' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => ['type' => 'string'],
+                    'role' => ['type' => 'string'],
+                    'salary' => ['type' => 'number'],
+                ],
+            ],
+        ],
+    ],
+];
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Schema Design">
+    - Make schemas as specific as possible
+    - Use `required` for critical fields
+    - Add `description` fields to guide extraction
+    - Use appropriate JSON Schema types
+  </Accordion>
+
+  <Accordion title="Performance">
+    - Use 'simple' strategy for single-page documents
+    - Use 'parallel' strategies for large documents
+    - Adjust chunk size based on document structure
+    - Monitor token usage with callbacks
+  </Accordion>
+
+  <Accordion title="Accuracy">
+    - Provide clear output instructions
+    - Use double-pass strategies for complex data
+    - Test with sample documents first
+    - Validate extracted data
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Extraction strategies process documents differently. The 'simple' strategy only processes the first chunk, while 'sequential' and 'parallel' process all content.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Strategies" icon="puzzle-piece" href="/guides/custom-strategies">
+    Learn to create custom extraction strategies
+  </Card>
+  <Card title="Multimodal Chat" icon="image" href="/guides/multimodal-chat">
+    Extract data from images in conversations
+  </Card>
+</CardGroup>

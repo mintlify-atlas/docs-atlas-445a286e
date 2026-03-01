@@ -1,0 +1,238 @@
+---
+title: "Tool Creation"
+description: "Create custom tools using closures and the MagicTool class"
+---
+
+## Overview
+
+LLM Magic allows you to create custom tools that the LLM can invoke during conversations. Tools can be created using closures (anonymous functions) or by implementing the `InvokableTool` interface.
+
+## Creating Tools with Closures
+
+The simplest way to create a tool is by passing a closure to the `tools()` method. The tool processor automatically generates a JSON schema from your function signature.
+
+```php
+use Mateffy\Magic;
+
+Magic::chat()
+    ->tools(
+        /**
+         * @description Add two numbers together
+         * @description $a The first number
+         * @description $b The second number
+         */
+        function add(int $a, int $b): int {
+            return $a + $b;
+        }
+    )
+    ->prompt('What is 15 + 27?')
+    ->ask();
+```
+
+### Named Tools
+
+You can provide a name for your tool by using an associative array:
+
+```php
+Magic::chat()
+    ->tools([
+        'add_numbers' => function (int $a, int $b): int {
+            return $a + $b;
+        }
+    ])
+    ->prompt('Calculate 15 + 27')
+    ->ask();
+```
+
+### Docblock Annotations
+
+Use docblock annotations to provide descriptions for your tools and parameters:
+
+- `@description` - Description for the tool or parameter
+- `@type $paramName` - Custom JSON schema type for a parameter
+
+```php
+/**
+ * @description Search for files in the downloads directory
+ * @description $search The search query to find files
+ * @type $search {"type": "string", "minLength": 1}
+ */
+function findFiles(string $search): array {
+    $files = Storage::disk('downloads')->allFiles();
+    return array_filter($files, fn($file) => str_contains($file, $search));
+}
+```
+
+## MagicTool Class
+
+When you pass a closure to `tools()`, it's automatically converted into a `MagicTool` instance by the `ToolProcessor`.
+
+### Properties
+
+<ParamField path="name" type="string" required>
+  The unique name of the tool that the LLM will use to invoke it
+</ParamField>
+
+<ParamField path="schema" type="array" required>
+  The JSON schema describing the tool's parameters, following the JSON Schema specification
+</ParamField>
+
+<ParamField path="callback" type="Closure" required>
+  The closure that will be executed when the tool is invoked
+</ParamField>
+
+## InvokableTool Interface
+
+For more complex tools, implement the `InvokableTool` interface:
+
+```php
+use Mateffy\Magic\Tools\InvokableTool;
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+class MyCustomTool implements InvokableTool
+{
+    public function name(): string
+    {
+        return 'my_custom_tool';
+    }
+
+    public function schema(): array
+    {
+        return [
+            'type' => 'object',
+            'description' => 'Description of what this tool does',
+            'properties' => [
+                'param1' => [
+                    'type' => 'string',
+                    'description' => 'First parameter',
+                ],
+                'param2' => [
+                    'type' => 'number',
+                    'description' => 'Second parameter',
+                ],
+            ],
+            'required' => ['param1'],
+        ];
+    }
+
+    public function validate(array $arguments): array
+    {
+        // Validate arguments here
+        return $arguments;
+    }
+
+    public function execute(ToolCall $call): mixed
+    {
+        // Execute tool logic here
+        return [
+            'result' => 'Tool executed successfully'
+        ];
+    }
+}
+```
+
+### Interface Methods
+
+<ParamField path="name" type="string" required>
+  Returns the unique name of the tool
+</ParamField>
+
+<ParamField path="schema" type="array" required>
+  Returns the JSON schema describing the tool's parameters and behavior
+</ParamField>
+
+<ParamField path="validate" type="array" required>
+  Validates the arguments passed to the tool. Return the validated arguments or throw an exception.
+  
+  **Parameters:**
+  - `$arguments` (array) - The arguments to validate
+</ParamField>
+
+<ParamField path="execute" type="mixed" required>
+  Executes the tool with the given ToolCall. Return the result of the tool execution.
+  
+  **Parameters:**
+  - `$call` (ToolCall) - The tool call containing arguments and metadata
+</ParamField>
+
+## Type Mapping
+
+The tool processor automatically maps PHP types to JSON Schema types:
+
+| PHP Type | JSON Schema Type |
+|----------|------------------|
+| `int` | `integer` |
+| `float` | `number` |
+| `string` | `string` |
+| `bool` | `boolean` |
+| `array` | `array` |
+| `object`, `stdClass` | `object` |
+
+## Multiple Tools
+
+You can register multiple tools at once:
+
+```php
+Magic::chat()
+    ->tools(
+        function add(int $a, int $b) { return $a + $b; },
+        function multiply(int $a, int $b) { return $a * $b; },
+        new MyCustomTool(),
+    )
+    ->prompt('Calculate (5 + 3) * 2')
+    ->ask();
+```
+
+Or use an array:
+
+```php
+Magic::chat()
+    ->tools([
+        'add' => function (int $a, int $b) { return $a + $b; },
+        'multiply' => function (int $a, int $b) { return $a * $b; },
+        new MyCustomTool(),
+    ])
+    ->prompt('Calculate (5 + 3) * 2')
+    ->ask();
+```
+
+## Tool Choice
+
+Control when and how tools are used:
+
+```php
+use Mateffy\Magic\Chat\ToolChoice;
+
+// Auto (default) - Let the model decide
+Magic::chat()
+    ->tools($myTools)
+    ->toolChoice(ToolChoice::Auto)
+    ->ask();
+
+// Required - Force the model to use a tool
+Magic::chat()
+    ->tools($myTools)
+    ->forceTool()
+    ->ask();
+
+// Specific tool - Force a specific tool
+Magic::chat()
+    ->tools($myTools)
+    ->toolChoice('my_tool_name')
+    ->ask();
+```
+
+## Error Handling
+
+Handle tool execution errors:
+
+```php
+Magic::chat()
+    ->tools($myTools)
+    ->onToolError(function (Throwable $error) {
+        Log::error('Tool execution failed', [
+            'error' => $error->getMessage(),
+        ]);
+    })
+    ->ask();
+```

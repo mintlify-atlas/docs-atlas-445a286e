@@ -1,0 +1,480 @@
+---
+title: 'Extraction Strategies'
+description: 'Choose the right strategy for extracting structured data from documents'
+---
+
+## Overview
+
+LLM Magic provides multiple extraction strategies to handle different document sizes and complexity levels. Each strategy balances speed, cost, and accuracy differently.
+
+## Available Strategies
+
+Access the list of available strategies:
+
+```php
+use Mateffy\Magic;
+
+$strategies = Magic::getExtractionStrategies();
+// Returns: Collection<string, class-string<Strategy>>
+```
+
+Built-in strategies:
+- `simple` - Single-pass extraction
+- `sequential` - Sequential batch processing
+- `sequential-auto-merge` - Sequential with automatic merging
+- `parallel` - Parallel batch processing
+- `parallel-auto-merge` - Parallel with automatic merging
+- `double-pass` - Two-pass extraction for maximum accuracy
+- `double-pass-auto-merge` - Two-pass with automatic merging
+
+## Simple Strategy
+
+The simplest and fastest strategy. Processes only the first batch of artifacts.
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic;
+
+$data = Magic::extract()
+    ->schema([
+        'type' => 'object',
+        'properties' => [
+            'title' => ['type' => 'string'],
+            'summary' => ['type' => 'string'],
+        ]
+    ])
+    ->artifacts([$document])
+    ->strategy('simple')
+    ->send();
+```
+
+```php SimpleStrategy.php
+<?php
+
+namespace Mateffy\Magic\Extraction\Strategies;
+
+use Mateffy\Magic\Chat\Prompt\ExtractorPrompt;
+use Mateffy\Magic\Extraction\Artifacts\Artifact;
+
+class SimpleStrategy extends Extractor
+{
+    /**
+     * @param Artifact[] $artifacts
+     */
+    public function run(array $artifacts): array
+    {
+        // We still batch the artifacts to avoid hitting the token limit, but only use the first one.
+        [$limitedArtifacts] = $this->getBatches(artifacts: $artifacts);
+
+        $prompt = new ExtractorPrompt(
+            extractor: $this, 
+            artifacts: $limitedArtifacts->all(), 
+            contextOptions: $this->contextOptions
+        );
+
+        $threadId = $this->createActorThread(llm: $this->llm, prompt: $prompt);
+
+        return $this->send(threadId: $threadId, llm: $this->llm, prompt: $prompt);
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Simple');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return 1;
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**Best for:** Short documents, quick summaries, single-page PDFs
+
+**Pros:** Fastest, lowest cost
+
+**Cons:** Only processes first batch of artifacts
+</Info>
+
+## Sequential Strategy
+
+Processes artifacts in batches sequentially, passing previous data to the next batch for context.
+
+<CodeGroup>
+```php Usage
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($documents)
+    ->strategy('sequential')
+    ->send();
+```
+
+```php SequentialStrategy.php
+<?php
+
+namespace Mateffy\Magic\Extraction\Strategies;
+
+use Mateffy\Magic\Extraction\Artifacts\Artifact;
+use Mateffy\Magic\Extraction\Strategies\Concerns\GenerateWithBatchedPrompt;
+
+class SequentialStrategy extends Extractor
+{
+    use GenerateWithBatchedPrompt;
+
+    /**
+     * @param  Artifact[]  $artifacts
+     */
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+
+        $data = null;
+
+        foreach ($batches as $batch) {
+            $data = $this->generate($batch, $data);
+        }
+
+        $this->logDataProgress(data: $data);
+
+        return $data;
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Sequential');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return $this->getBatches(artifacts: $artifacts)->count();
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**Best for:** Long documents, maintaining context across pages
+
+**Pros:** Maintains context, processes all artifacts
+
+**Cons:** Slower than parallel, sequential processing
+</Info>
+
+## Parallel Strategy
+
+Processes batches concurrently, then merges results using an LLM.
+
+<CodeGroup>
+```php Usage
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($documents)
+    ->strategy('parallel')
+    ->concurrency(5)  // Process 5 batches at once
+    ->send();
+```
+
+```php ParallelStrategy.php
+<?php
+
+namespace Mateffy\Magic\Extraction\Strategies;
+
+use Illuminate\Support\Collection;
+use Mateffy\Magic\Chat\Prompt\ParallelMergerPrompt;
+use Mateffy\Magic\Extraction\Artifacts\Artifact;
+
+class ParallelStrategy extends Extractor
+{
+    use GenerateWithBatchedPrompt;
+    use SupportsConcurrency;
+
+    /**
+     * @param Artifact[] $artifacts
+     */
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+
+        $dataList = $this->runConcurrently(
+            batches: $batches,
+            execute: fn(Collection $artifacts) => $this->generate($artifacts)
+        );
+
+        $data = $this->mergeWithLlm($dataList->all());
+
+        $this->logDataProgress(data: $data);
+
+        return $data;
+    }
+
+    protected function mergeWithLlm(array $dataList): ?array
+    {
+        $prompt = new ParallelMergerPrompt(extractor: $this, datas: $dataList);
+
+        $threadId = $this->createActorThread(llm: $this->llm, prompt: $prompt);
+
+        return $this->send(
+            threadId: $threadId,
+            llm: $this->llm,
+            prompt: $prompt
+        );
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Parallel');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        // Add one for the merge step.
+        return $this->getBatches(artifacts: $artifacts)->count() + 1;
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**Best for:** Large documents where speed is critical
+
+**Pros:** Fastest for large documents, processes all artifacts
+
+**Cons:** Higher cost, requires merge step, may lose some context
+</Info>
+
+## Double-Pass Strategy
+
+Performs two passes: first parallel for broad coverage, then sequential for detail and accuracy.
+
+<CodeGroup>
+```php Usage
+$data = Magic::extract()
+    ->schema($schema)
+    ->artifacts($documents)
+    ->strategy('double-pass')
+    ->send();
+```
+
+```php DoublePassStrategy.php
+<?php
+
+namespace Mateffy\Magic\Extraction\Strategies;
+
+use Mateffy\Magic\Extraction\Artifacts\Artifact;
+
+/**
+ * The double pass performs two passes on the input data, using two different strategies.
+ *
+ * The first pass is done in parallel, to get the initial data.
+ * This results in a data object that may not contain very detailed data on the full set of artifacts, but is a good starting point.
+ *
+ * The second pass is done sequentially, to get the final data.
+ * Since this passes the previous data into the next batch, it can go through the documents again to see if anything was missed.
+ */
+class DoublePassStrategy extends Extractor
+{
+    /**
+     * @param Artifact[] $artifacts
+     */
+    public function run(array $artifacts): array
+    {
+        $parallel = $this->makeParallelStrategy();
+
+        // Run the parallel strategy first, to get the data initial data
+        $firstPassData = $parallel->run($artifacts);
+
+        $sequential = $this->makeSequentialStrategy(initialData: $firstPassData);
+
+        // Run the sequential strategy second, to get the final data
+        $secondPassData = $sequential->run($artifacts);
+
+        return $secondPassData;
+    }
+
+    protected function makeParallelStrategy(): Strategy
+    {
+        return ParallelStrategy::make(
+            llm: $this->llm,
+            contextOptions: $this->contextOptions,
+            outputInstructions: $this->outputInstructions,
+            schema: $this->schema,
+            chunkSize: $this->chunkSize,
+            onDataProgress: $this->onDataProgress,
+            onTokenStats: $this->onTokenStats,
+            onMessageProgress: $this->onMessageProgress,
+            onMessage: $this->onMessage,
+            onActorTelemetry: $this->onActorTelemetry
+        );
+    }
+
+    protected function makeSequentialStrategy(array $initialData = []): Strategy
+    {
+        return SequentialStrategy::make(
+            llm: $this->llm,
+            contextOptions: $this->contextOptions,
+            outputInstructions: $this->outputInstructions,
+            schema: $this->schema,
+            chunkSize: $this->chunkSize,
+            onDataProgress: $this->onDataProgress,
+            onTokenStats: $this->onTokenStats,
+            onMessageProgress: $this->onMessageProgress,
+            onMessage: $this->onMessage,
+            onActorTelemetry: $this->onActorTelemetry,
+
+            // Pass the data from the first pass into the second pass
+            initialData: $initialData
+        );
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Double Pass');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        $parallelSteps = $this->makeParallelStrategy()->getEstimatedSteps($artifacts);
+        $sequentialSteps = $this->makeSequentialStrategy()->getEstimatedSteps($artifacts);
+
+        return $parallelSteps + $sequentialSteps;
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**Best for:** Complex documents requiring high accuracy
+
+**Pros:** Highest accuracy, catches details missed in first pass
+
+**Cons:** Highest cost, slowest processing time
+</Info>
+
+## Auto-Merge Variants
+
+Strategies ending in `-auto-merge` skip the LLM merge step and use automatic data merging:
+
+```php
+// Uses SmartDataMerger instead of LLM merge
+->strategy('parallel-auto-merge')
+```
+
+<Tip>
+Auto-merge variants are faster and cheaper but may produce less coherent results for complex schemas.
+</Tip>
+
+## Registering Custom Strategies
+
+Extend the extraction system with custom strategies:
+
+```php
+use Mateffy\Magic;
+use App\Extraction\MyCustomStrategy;
+
+Magic::registerStrategy('my-custom', MyCustomStrategy::class);
+
+// Use it
+Magic::extract()
+    ->strategy('my-custom')
+    ->send();
+```
+
+Your custom strategy must extend `Extractor`:
+
+```php
+use Mateffy\Magic\Extraction\Strategies\Extractor;
+
+class MyCustomStrategy extends Extractor
+{
+    public function run(array $artifacts): array
+    {
+        // Your implementation
+    }
+
+    public static function getLabel(): string
+    {
+        return 'My Custom Strategy';
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return 1;
+    }
+}
+```
+
+## Strategy Comparison
+
+<CardGroup cols={2}>
+  <Card title="Simple" icon="bolt">
+    **Speed:** Fastest
+    
+    **Cost:** Lowest
+    
+    **Accuracy:** Basic
+    
+    **Use case:** Short documents
+  </Card>
+  
+  <Card title="Sequential" icon="list">
+    **Speed:** Moderate
+    
+    **Cost:** Moderate
+    
+    **Accuracy:** Good
+    
+    **Use case:** Long documents
+  </Card>
+  
+  <Card title="Parallel" icon="layer-group">
+    **Speed:** Fast
+    
+    **Cost:** Higher
+    
+    **Accuracy:** Good
+    
+    **Use case:** Large documents
+  </Card>
+  
+  <Card title="Double-Pass" icon="rotate">
+    **Speed:** Slowest
+    
+    **Cost:** Highest
+    
+    **Accuracy:** Best
+    
+    **Use case:** Complex extraction
+  </Card>
+</CardGroup>
+
+## Performance Tips
+
+<AccordionGroup>
+  <Accordion title="Choosing Chunk Size">
+    Adjust chunk size based on your model's context window:
+    
+    ```php
+    ->chunkSize(100000)  // For larger context models
+    ```
+  </Accordion>
+  
+  <Accordion title="Concurrency Settings">
+    Control how many batches process simultaneously:
+    
+    ```php
+    ->concurrency(10)  // Process up to 10 batches at once
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitoring Progress">
+    Track extraction progress with callbacks:
+    
+    ```php
+    ->onDataProgress(function (array $data) {
+        Log::info('Extraction progress', ['data' => $data]);
+    })
+    ```
+  </Accordion>
+</AccordionGroup>

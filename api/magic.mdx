@@ -1,0 +1,254 @@
+---
+title: Magic Facade
+description: Core facade providing convenient static methods for common LLM operations
+---
+
+The `Magic` facade provides the primary interface for interacting with LLM Magic. It offers convenient static methods for chat, extraction, embeddings, and quick question-answering operations.
+
+## Methods
+
+### ask
+
+Quickly ask a question and get a structured or simple response.
+
+```php
+Magic::ask(
+    prompt: 'What is the capital of France?',
+    schema: ['type' => 'string'],
+    model: null,
+    sentence: true
+)
+```
+
+<ParamField path="prompt" type="string" required>
+  The question or prompt to ask the LLM
+</ParamField>
+
+<ParamField path="schema" type="array" default="['type' => 'string']">
+  JSON schema defining the expected response type. Can be 'string', 'number', 'boolean', 'array', or 'object' with properties
+</ParamField>
+
+<ParamField path="model" type="string|LLM|null" default="null">
+  The model to use. If null, uses the default configured model
+</ParamField>
+
+<ParamField path="sentence" type="bool" default="true">
+  Whether to respond with a full sentence (true) or just the answer (false)
+</ParamField>
+
+<ResponseField name="return" type="mixed">
+  The extracted answer matching the specified schema type
+</ResponseField>
+
+### chat
+
+Create a new chat builder for conversational interactions.
+
+```php
+Magic::chat()
+```
+
+<ResponseField name="return" type="ChatPreconfiguredModelBuilder">
+  A new chat builder instance for configuring and executing chat operations
+</ResponseField>
+
+### extract
+
+Create a new extraction builder for extracting structured data from documents.
+
+```php
+Magic::extract()
+```
+
+<ResponseField name="return" type="ExtractionLLMBuilder">
+  A new extraction builder instance for configuring and executing extraction operations
+</ResponseField>
+
+### embeddings
+
+Create a new embeddings builder for generating text embeddings.
+
+```php
+Magic::embeddings(
+    input: null,
+    model: null
+)
+```
+
+<ParamField path="input" type="Closure|string|null" default="null">
+  The text input to generate embeddings for, or a closure that returns the input
+</ParamField>
+
+<ParamField path="model" type="OpenAIEmbeddings|null" default="null">
+  The embedding model to use. If null, uses the default configured model
+</ParamField>
+
+<ResponseField name="return" type="EmbeddingsBuilder">
+  A new embeddings builder instance
+</ResponseField>
+
+### function
+
+Use the LLM as a function that returns a specific type of value.
+
+```php
+Magic::function(
+    description: 'Return the year when the song "Bohemian Rhapsody" was released',
+    type: 'number',
+    schema: null,
+    llm: null
+)
+```
+
+<ParamField path="description" type="string" required>
+  Description of what the function should return
+</ParamField>
+
+<ParamField path="type" type="'string'|'number'|'boolean'|'array'|'object'" required>
+  The type of value to return
+</ParamField>
+
+<ParamField path="schema" type="array|null" default="null">
+  Optional JSON schema for complex types (array or object)
+</ParamField>
+
+<ParamField path="llm" type="LLM|string|null" default="null">
+  The model to use. If null, uses the default configured model
+</ParamField>
+
+<ResponseField name="return" type="mixed">
+  The value returned by the LLM function
+</ResponseField>
+
+<ResponseField name="throws" type="UnableToActAsFunction">
+  Thrown when the LLM cannot complete the requested task
+</ResponseField>
+
+<ResponseField name="throws" type="UnknownInferenceException">
+  Thrown when the LLM returns an invalid response
+</ResponseField>
+
+### models
+
+Get all registered models in a collection.
+
+```php
+Magic::models()
+```
+
+<ResponseField name="return" type="Collection<string, string>">
+  Collection of model keys and labels, sorted alphabetically by key
+</ResponseField>
+
+### error
+
+Create a tool call exception for use in tool implementations.
+
+```php
+Magic::error(
+    message: 'Invalid parameter value',
+    code: null,
+    previous: null
+)
+```
+
+<ParamField path="message" type="string" required>
+  The error message
+</ParamField>
+
+<ParamField path="code" type="string|null" default="null">
+  Optional error code
+</ParamField>
+
+<ParamField path="previous" type="Throwable|null" default="null">
+  Previous exception for exception chaining
+</ParamField>
+
+<ResponseField name="return" type="ToolCallException">
+  A new tool call exception instance
+</ResponseField>
+
+### end
+
+Create an end conversation signal with output.
+
+```php
+Magic::end($output)
+```
+
+<ParamField path="output" type="mixed" required>
+  The output value to return when ending the conversation
+</ParamField>
+
+<ResponseField name="return" type="EndConversation">
+  An end conversation signal object
+</ResponseField>
+
+## Helper Methods
+
+### defaultModelName
+
+Get the configured default model name.
+
+```php
+Magic::defaultModelName()
+```
+
+<ResponseField name="return" type="string">
+  The default model name from configuration
+</ResponseField>
+
+### defaultModelLabel
+
+Get the human-readable label for the default model.
+
+```php
+Magic::defaultModelLabel()
+```
+
+<ResponseField name="return" type="string">
+  The default model's display label
+</ResponseField>
+
+### defaultModel
+
+Get the default model instance.
+
+```php
+Magic::defaultModel()
+```
+
+<ResponseField name="return" type="LLM">
+  The default LLM model instance
+</ResponseField>
+
+### getExtractionStrategies
+
+Get all registered extraction strategies.
+
+```php
+Magic::getExtractionStrategies()
+```
+
+<ResponseField name="return" type="Collection<string, class-string<Strategy>>">
+  Collection of strategy keys and class names
+</ResponseField>
+
+### registerStrategy
+
+Register a custom extraction strategy.
+
+```php
+Magic::registerStrategy(
+    key: 'my-custom-strategy',
+    strategy: MyCustomStrategy::class
+)
+```
+
+<ParamField path="key" type="string" required>
+  The unique identifier for the strategy
+</ParamField>
+
+<ParamField path="strategy" type="class-string<Strategy>" required>
+  The fully qualified class name of the strategy implementation
+</ParamField>

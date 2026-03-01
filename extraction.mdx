@@ -1,0 +1,530 @@
+---
+title: Document Extraction
+description: Extract structured data from PDFs, images, Word documents, and other files using Magic::extract()
+---
+
+## Overview
+
+LLM Magic's extraction feature allows you to extract structured, validated data from various document types including PDFs, images, Word documents, and more. The system automatically processes documents and returns JSON data matching your schema.
+
+## Quick Start
+
+### Basic Extraction
+
+Extract data from a document using a JSON schema:
+
+```php
+use Mateffy\Magic;
+
+$data = Magic::extract()
+    ->schema([
+        'type' => 'object',
+        'properties' => [
+            'name' => ['type' => 'string'],
+            'age' => ['type' => 'integer'],
+        ],
+        'required' => ['name', 'age'],
+    ])
+    ->file('/path/to/document.pdf')
+    ->send();
+```
+
+## Working with Files
+
+### Single File
+
+Process a single document:
+
+```php
+Magic::extract()
+    ->schema([/* ... */])
+    ->file('/path/to/invoice.pdf')
+    ->send();
+```
+
+### Multiple Files
+
+Process multiple documents at once:
+
+```php
+Magic::extract()
+    ->schema([/* ... */])
+    ->files([
+        '/path/to/document1.pdf',
+        '/path/to/document2.pdf',
+        '/path/to/image.jpg',
+    ])
+    ->send();
+```
+
+### Using Artifacts
+
+For more control, use the `Artifact` class:
+
+```php
+use Mateffy\Magic\Extraction\Artifacts\DiskArtifact;
+
+$artifact = DiskArtifact::from(
+    path: '/path/to/document.pdf',
+    disk: 's3' // Optional: Laravel disk
+);
+
+Magic::extract()
+    ->schema([/* ... */])
+    ->artifact($artifact)
+    ->send();
+```
+
+## Defining Schemas
+
+### JSON Schema Format
+
+Define the structure of data you want to extract using JSON Schema:
+
+```php
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'invoice_number' => [
+            'type' => 'string',
+            'description' => 'The invoice reference number',
+        ],
+        'date' => [
+            'type' => 'string',
+            'format' => 'date',
+        ],
+        'total_amount' => [
+            'type' => 'number',
+            'description' => 'Total amount in USD',
+        ],
+        'items' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'description' => ['type' => 'string'],
+                    'quantity' => ['type' => 'integer'],
+                    'price' => ['type' => 'number'],
+                ],
+                'required' => ['description', 'quantity', 'price'],
+            ],
+        ],
+    ],
+    'required' => ['invoice_number', 'date', 'total_amount', 'items'],
+];
+
+Magic::extract()
+    ->schema($schema)
+    ->file('/path/to/invoice.pdf')
+    ->send();
+```
+
+### Complex Schemas
+
+Extract nested data structures:
+
+```php
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'patient' => [
+            'type' => 'object',
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'date_of_birth' => ['type' => 'string', 'format' => 'date'],
+                'address' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'street' => ['type' => 'string'],
+                        'city' => ['type' => 'string'],
+                        'zip' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ],
+        'medications' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => ['type' => 'string'],
+                    'dosage' => ['type' => 'string'],
+                    'frequency' => ['type' => 'string'],
+                ],
+            ],
+        ],
+    ],
+];
+```
+
+## Extraction Strategies
+
+LLM Magic provides multiple strategies for processing documents, each optimized for different use cases.
+
+### Available Strategies
+
+```php
+use Mateffy\Magic;
+
+// Simple: Process entire document at once (default)
+Magic::extract()
+    ->strategy('simple')
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Sequential: Process in chunks, one after another
+Magic::extract()
+    ->strategy('sequential')
+    ->file('/path/to/large-document.pdf')
+    ->send();
+
+// Sequential with auto-merge: Combines results automatically
+Magic::extract()
+    ->strategy('sequential-auto-merge')
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Parallel: Process chunks concurrently for speed
+Magic::extract()
+    ->strategy('parallel')
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Parallel with auto-merge
+Magic::extract()
+    ->strategy('parallel-auto-merge')
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Double-pass: Extract then verify for accuracy
+Magic::extract()
+    ->strategy('double-pass')
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Double-pass with auto-merge
+Magic::extract()
+    ->strategy('double-pass-auto-merge')
+    ->file('/path/to/document.pdf')
+    ->send();
+```
+
+### Strategy Comparison
+
+<AccordionGroup>
+  <Accordion title="Simple Strategy">
+    Best for: Small documents (1-5 pages)
+    
+    Processes the entire document in a single LLM call. Fastest for small documents but may hit context limits on larger files.
+  </Accordion>
+  
+  <Accordion title="Sequential Strategy">
+    Best for: Large documents where order matters
+    
+    Splits the document into chunks and processes them one by one. Good for documents where context from earlier pages affects later pages.
+  </Accordion>
+  
+  <Accordion title="Parallel Strategy">
+    Best for: Large documents needing speed
+    
+    Processes multiple chunks simultaneously. Much faster than sequential but uses more resources.
+  </Accordion>
+  
+  <Accordion title="Double-Pass Strategy">
+    Best for: Critical data requiring high accuracy
+    
+    Makes two passes: first to extract, second to verify. Highest accuracy but slower and more expensive.
+  </Accordion>
+</AccordionGroup>
+
+### Custom Chunk Size
+
+Control how documents are split:
+
+```php
+Magic::extract()
+    ->strategy('sequential')
+    ->chunkSize(2) // Process 2 pages at a time
+    ->file('/path/to/document.pdf')
+    ->send();
+```
+
+## Context Options
+
+Control what content from documents is included in the extraction:
+
+```php
+use Mateffy\Magic\Extraction\ContextOptions;
+
+// Include everything (default)
+Magic::extract()
+    ->contextOptions(ContextOptions::all())
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Custom context options
+Magic::extract()
+    ->contextOptions(new ContextOptions(
+        includeText: true,
+        includeEmbeddedImages: true,
+        markEmbeddedImages: true,
+        includePageImages: false,
+        markPageImages: false,
+    ))
+    ->file('/path/to/document.pdf')
+    ->send();
+
+// Default context (text + embedded images)
+Magic::extract()
+    ->contextOptions(ContextOptions::default())
+    ->file('/path/to/document.pdf')
+    ->send();
+```
+
+### Context Options Explained
+
+<ParamField path="includeText" type="boolean" default="true">
+  Include text content from the document
+</ParamField>
+
+<ParamField path="includeEmbeddedImages" type="boolean" default="true">
+  Include images embedded within the document content
+</ParamField>
+
+<ParamField path="markEmbeddedImages" type="boolean" default="true">
+  Add markers in text where embedded images appear
+</ParamField>
+
+<ParamField path="includePageImages" type="boolean" default="false">
+  Include full-page screenshot images
+</ParamField>
+
+<ParamField path="markPageImages" type="boolean" default="false">
+  Add markers for page images
+</ParamField>
+
+## Output Instructions
+
+Provide additional guidance to improve extraction accuracy:
+
+```php
+Magic::extract()
+    ->schema([/* ... */])
+    ->outputInstructions(
+        'Extract all financial data in USD. ' .
+        'Convert dates to YYYY-MM-DD format. ' .
+        'If a field is not present, use null.'
+    )
+    ->file('/path/to/invoice.pdf')
+    ->send();
+```
+
+## Model Selection
+
+Choose the AI model for extraction:
+
+```php
+Magic::extract()
+    ->model('google/gemini-2.0-flash-lite')
+    ->schema([/* ... */])
+    ->file('/path/to/document.pdf')
+    ->send();
+```
+
+## Working with Results
+
+The extraction returns an Illuminate `Collection` of results:
+
+```php
+$results = Magic::extract()
+    ->schema([/* ... */])
+    ->files([
+        '/path/to/doc1.pdf',
+        '/path/to/doc2.pdf',
+    ])
+    ->send();
+
+// Iterate over results
+foreach ($results as $result) {
+    echo $result['invoice_number'];
+}
+
+// Use collection methods
+$totalAmount = $results->sum('total_amount');
+
+// Convert to array
+$data = $results->toArray();
+
+// Get first result
+$firstResult = $results->first();
+```
+
+## Callbacks
+
+### Token Statistics
+
+Track token usage during extraction:
+
+```php
+Magic::extract()
+    ->schema([/* ... */])
+    ->file('/path/to/document.pdf')
+    ->onTokenStats(function ($stats) {
+        logger()->info('Token usage', $stats);
+    })
+    ->send();
+```
+
+### Extraction Progress
+
+Monitor extraction progress:
+
+```php
+Magic::extract()
+    ->schema([/* ... */])
+    ->file('/path/to/document.pdf')
+    ->onChunkExtracted(function ($chunk, $result) {
+        echo "Processed chunk {$chunk} of document\n";
+    })
+    ->send();
+```
+
+## Complete Example
+
+Here's a complete example extracting invoice data:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Extraction\ContextOptions;
+
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'invoice_number' => [
+            'type' => 'string',
+            'description' => 'Invoice reference number',
+        ],
+        'invoice_date' => [
+            'type' => 'string',
+            'format' => 'date',
+        ],
+        'due_date' => [
+            'type' => 'string',
+            'format' => 'date',
+        ],
+        'vendor' => [
+            'type' => 'object',
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'address' => ['type' => 'string'],
+                'tax_id' => ['type' => 'string'],
+            ],
+        ],
+        'line_items' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'description' => ['type' => 'string'],
+                    'quantity' => ['type' => 'integer'],
+                    'unit_price' => ['type' => 'number'],
+                    'total' => ['type' => 'number'],
+                ],
+            ],
+        ],
+        'subtotal' => ['type' => 'number'],
+        'tax' => ['type' => 'number'],
+        'total' => ['type' => 'number'],
+    ],
+    'required' => [
+        'invoice_number',
+        'invoice_date',
+        'vendor',
+        'line_items',
+        'total',
+    ],
+];
+
+$results = Magic::extract()
+    ->model('google/gemini-2.0-flash-lite')
+    ->schema($schema)
+    ->strategy('double-pass-auto-merge')
+    ->contextOptions(ContextOptions::all())
+    ->outputInstructions(
+        'Extract all amounts as numbers (no currency symbols). ' .
+        'Convert all dates to YYYY-MM-DD format. ' .
+        'Ensure line item totals are calculated correctly.'
+    )
+    ->files([
+        storage_path('invoices/invoice1.pdf'),
+        storage_path('invoices/invoice2.pdf'),
+    ])
+    ->onTokenStats(function ($stats) {
+        logger()->info('Extraction tokens', $stats);
+    })
+    ->send();
+
+foreach ($results as $invoice) {
+    echo "Invoice {$invoice['invoice_number']}: ${$invoice['total']}\n";
+}
+```
+
+## Supported File Types
+
+<CardGroup cols={3}>
+  <Card title="PDF" icon="file-pdf">
+    Portable Document Format files
+  </Card>
+  
+  <Card title="Images" icon="image">
+    JPG, PNG, GIF, WebP
+  </Card>
+  
+  <Card title="Word" icon="file-word">
+    DOCX documents
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Start with Simple Strategy">
+    Begin with the `simple` strategy and upgrade to more complex strategies only if needed.
+  </Step>
+  
+  <Step title="Provide Clear Schemas">
+    Use descriptive property names and include `description` fields to guide extraction.
+  </Step>
+  
+  <Step title="Test with Sample Documents">
+    Always test your schema with sample documents before processing in production.
+  </Step>
+  
+  <Step title="Use Output Instructions">
+    Provide specific instructions about formats, units, and handling missing data.
+  </Step>
+  
+  <Step title="Choose the Right Strategy">
+    Use `double-pass` for critical data, `parallel` for speed, `simple` for small documents.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/chat">
+    Build conversational AI with multi-turn conversations
+  </Card>
+  
+  <Card title="Embeddings" icon="vector-square" href="/embeddings">
+    Generate embeddings for semantic search
+  </Card>
+  
+  <Card title="Streaming" icon="bolt" href="/streaming">
+    Learn about real-time streaming responses
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/magic">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

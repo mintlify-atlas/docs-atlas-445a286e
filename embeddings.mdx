@@ -1,0 +1,498 @@
+---
+title: Embeddings
+description: Generate vector embeddings for semantic search, similarity matching, and AI-powered features using Magic::embeddings()
+---
+
+## Overview
+
+Embeddings convert text into high-dimensional vectors that capture semantic meaning. Use embeddings to build semantic search, find similar content, cluster documents, or power recommendation systems.
+
+## Quick Start
+
+### Generate Embeddings
+
+Create embeddings from text input:
+
+```php
+use Mateffy\Magic;
+
+$embedded = Magic::embeddings()
+    ->input('The quick brown fox jumps over the lazy dog')
+    ->get();
+
+// Access the vector
+$vector = $embedded->vectors;
+```
+
+### Shorthand Syntax
+
+You can pass the input directly to the `embeddings()` method:
+
+```php
+$embedded = Magic::embeddings(
+    'The quick brown fox jumps over the lazy dog'
+)->get();
+```
+
+## Configuration
+
+### Input Text
+
+Set the text to embed:
+
+```php
+Magic::embeddings()
+    ->input('Your text here')
+    ->get();
+```
+
+### Model Selection
+
+Choose the embedding model:
+
+```php
+use Mateffy\Magic\Embeddings\OpenAIEmbeddings;
+
+$model = new OpenAIEmbeddings('text-embedding-3-small');
+
+Magic::embeddings()
+    ->model($model)
+    ->input('Your text here')
+    ->get();
+```
+
+### Dynamic Input
+
+Use a closure to generate input dynamically:
+
+```php
+Magic::embeddings()
+    ->input(function () {
+        return Document::latest()->first()->content;
+    })
+    ->get();
+```
+
+## Working with Results
+
+The `get()` method returns an `EmbeddedData` object:
+
+```php
+$embedded = Magic::embeddings()
+    ->input('Sample text')
+    ->get();
+
+// Access the vector array
+$vector = $embedded->vectors;
+
+// Typical vector format: array of floats
+// Example: [0.123, -0.456, 0.789, ...]
+```
+
+## Use Cases
+
+### Semantic Search
+
+Find content by meaning, not just keywords:
+
+```php
+use Mateffy\Magic;
+
+// Embed the search query
+$queryEmbedding = Magic::embeddings()
+    ->input('artificial intelligence and machine learning')
+    ->get();
+
+// Find similar documents using cosine similarity
+$results = Document::query()
+    ->select('*')
+    ->selectRaw('1 - (embedding <=> ?) as similarity', [$queryEmbedding->vectors])
+    ->where('1 - (embedding <=> ?)', '>', 0.8)
+    ->orderBy('similarity', 'desc')
+    ->limit(10)
+    ->get();
+```
+
+<Note>
+This example assumes you're using PostgreSQL with the pgvector extension. The `<=>` operator calculates cosine distance.
+</Note>
+
+### Document Similarity
+
+Find similar documents:
+
+```php
+// Embed multiple documents
+$documents = [
+    'Machine learning is a subset of AI',
+    'Deep learning uses neural networks',
+    'The weather is nice today',
+];
+
+$embeddings = [];
+foreach ($documents as $doc) {
+    $embeddings[] = Magic::embeddings()
+        ->input($doc)
+        ->get()
+        ->vectors;
+}
+
+// Compare similarity between first and other documents
+$baseVector = $embeddings[0];
+foreach (array_slice($embeddings, 1) as $i => $vector) {
+    $similarity = cosineSimilarity($baseVector, $vector);
+    echo "Similarity with doc " . ($i + 2) . ": {$similarity}\n";
+}
+
+function cosineSimilarity(array $a, array $b): float {
+    $dotProduct = array_sum(array_map(fn($x, $y) => $x * $y, $a, $b));
+    $magnitudeA = sqrt(array_sum(array_map(fn($x) => $x * $x, $a)));
+    $magnitudeB = sqrt(array_sum(array_map(fn($x) => $x * $x, $b)));
+    
+    return $dotProduct / ($magnitudeA * $magnitudeB);
+}
+```
+
+### Content Clustering
+
+Group similar content together:
+
+```php
+$articles = Article::all();
+
+// Generate embeddings for all articles
+foreach ($articles as $article) {
+    $embedding = Magic::embeddings()
+        ->input($article->content)
+        ->get();
+    
+    $article->update([
+        'embedding' => $embedding->vectors,
+    ]);
+}
+
+// Now you can cluster or find similar articles
+```
+
+### Recommendation System
+
+Build a content recommendation engine:
+
+```php
+class RecommendationService
+{
+    public function findSimilarArticles(Article $article, int $limit = 5)
+    {
+        return Article::query()
+            ->where('id', '!=', $article->id)
+            ->select('*')
+            ->selectRaw(
+                '1 - (embedding <=> ?) as similarity',
+                [$article->embedding]
+            )
+            ->orderBy('similarity', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+    
+    public function recommendForUser(User $user)
+    {
+        // Get user's reading history
+        $recentArticles = $user->readArticles()
+            ->latest()
+            ->limit(5)
+            ->get();
+        
+        // Average their embeddings to create a user profile
+        $userProfile = $this->averageEmbeddings(
+            $recentArticles->pluck('embedding')->toArray()
+        );
+        
+        // Find articles similar to user profile
+        return Article::query()
+            ->whereNotIn('id', $user->readArticles()->pluck('id'))
+            ->select('*')
+            ->selectRaw(
+                '1 - (embedding <=> ?) as similarity',
+                [$userProfile]
+            )
+            ->where('1 - (embedding <=> ?)', '>', 0.7)
+            ->orderBy('similarity', 'desc')
+            ->limit(10)
+            ->get();
+    }
+    
+    private function averageEmbeddings(array $embeddings): array
+    {
+        $count = count($embeddings);
+        $dimensions = count($embeddings[0]);
+        $average = array_fill(0, $dimensions, 0);
+        
+        foreach ($embeddings as $embedding) {
+            foreach ($embedding as $i => $value) {
+                $average[$i] += $value;
+            }
+        }
+        
+        return array_map(fn($sum) => $sum / $count, $average);
+    }
+}
+```
+
+## Token Statistics
+
+Track token usage for embedding generation:
+
+```php
+Magic::embeddings()
+    ->input('Your text here')
+    ->onTokenStats(function ($stats) {
+        logger()->info('Embedding tokens used', $stats);
+    })
+    ->get();
+```
+
+## Database Storage
+
+### PostgreSQL with pgvector
+
+Store embeddings in PostgreSQL using the pgvector extension:
+
+```php
+// Migration
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+Schema::table('articles', function (Blueprint $table) {
+    $table->vector('embedding', 1536); // OpenAI embeddings are 1536 dimensions
+    $table->index('embedding', 'articles_embedding_idx')->algorithm('ivfflat');
+});
+```
+
+```php
+// Model
+class Article extends Model
+{
+    protected $casts = [
+        'embedding' => 'array',
+    ];
+    
+    public function generateEmbedding(): void
+    {
+        $embedding = Magic::embeddings()
+            ->input($this->content)
+            ->get();
+        
+        $this->update([
+            'embedding' => $embedding->vectors,
+        ]);
+    }
+}
+```
+
+### Vector Search Query
+
+```php
+// Find similar articles using cosine similarity
+$query = 'machine learning tutorials';
+
+$queryEmbedding = Magic::embeddings()
+    ->input($query)
+    ->get();
+
+$results = Article::query()
+    ->select('*')
+    ->selectRaw('1 - (embedding <=> ?) as similarity', [
+        json_encode($queryEmbedding->vectors),
+    ])
+    ->orderBy('similarity', 'desc')
+    ->limit(10)
+    ->get();
+```
+
+## Batch Processing
+
+Process multiple texts efficiently:
+
+```php
+use Mateffy\Magic;
+
+$documents = Document::whereNull('embedding')->get();
+
+foreach ($documents as $document) {
+    try {
+        $embedding = Magic::embeddings()
+            ->input($document->content)
+            ->onTokenStats(function ($stats) use ($document) {
+                logger()->info('Embedded document', [
+                    'document_id' => $document->id,
+                    'tokens' => $stats,
+                ]);
+            })
+            ->get();
+        
+        $document->update([
+            'embedding' => $embedding->vectors,
+        ]);
+        
+        // Rate limiting
+        usleep(100000); // 100ms delay between requests
+    } catch (\Throwable $e) {
+        logger()->error('Embedding failed', [
+            'document_id' => $document->id,
+            'error' => $e->getMessage(),
+        ]);
+    }
+}
+```
+
+## Complete Example
+
+Here's a complete semantic search implementation:
+
+```php
+use Mateffy\Magic;
+use Illuminate\Support\Facades\DB;
+
+class SemanticSearchService
+{
+    /**
+     * Index a document for semantic search
+     */
+    public function indexDocument(Document $document): void
+    {
+        $embedding = Magic::embeddings()
+            ->input($document->title . '\n\n' . $document->content)
+            ->get();
+        
+        $document->update([
+            'embedding' => $embedding->vectors,
+            'indexed_at' => now(),
+        ]);
+    }
+    
+    /**
+     * Search documents by semantic similarity
+     */
+    public function search(
+        string $query,
+        float $threshold = 0.7,
+        int $limit = 20
+    ): Collection {
+        $queryEmbedding = Magic::embeddings()
+            ->input($query)
+            ->get();
+        
+        return Document::query()
+            ->select('*')
+            ->selectRaw(
+                '1 - (embedding <=> ?) as similarity',
+                [json_encode($queryEmbedding->vectors)]
+            )
+            ->whereRaw(
+                '1 - (embedding <=> ?) > ?',
+                [json_encode($queryEmbedding->vectors), $threshold]
+            )
+            ->orderBy('similarity', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+    
+    /**
+     * Find documents similar to a given document
+     */
+    public function findSimilar(
+        Document $document,
+        int $limit = 10
+    ): Collection {
+        return Document::query()
+            ->where('id', '!=', $document->id)
+            ->select('*')
+            ->selectRaw(
+                '1 - (embedding <=> ?) as similarity',
+                [json_encode($document->embedding)]
+            )
+            ->orderBy('similarity', 'desc')
+            ->limit($limit)
+            ->get();
+    }
+    
+    /**
+     * Reindex all documents
+     */
+    public function reindexAll(): void
+    {
+        $documents = Document::all();
+        
+        $bar = $this->output->createProgressBar($documents->count());
+        
+        foreach ($documents as $document) {
+            $this->indexDocument($document);
+            $bar->advance();
+            usleep(100000); // Rate limiting
+        }
+        
+        $bar->finish();
+    }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Normalize Text" icon="text">
+    Clean and normalize text before embedding for consistent results.
+  </Card>
+  
+  <Card title="Cache Embeddings" icon="database">
+    Store embeddings in your database - don't regenerate them on every request.
+  </Card>
+  
+  <Card title="Batch Processing" icon="layer-group">
+    When indexing many documents, add delays between requests to respect rate limits.
+  </Card>
+  
+  <Card title="Index Strategy" icon="magnifying-glass">
+    Use vector indices (IVFFlat or HNSW) for fast similarity search on large datasets.
+  </Card>
+</CardGroup>
+
+## Performance Tips
+
+<Steps>
+  <Step title="Use Vector Indices">
+    Create proper vector indices in your database for fast similarity queries.
+  </Step>
+  
+  <Step title="Chunk Large Texts">
+    Break very long documents into smaller chunks before embedding.
+  </Step>
+  
+  <Step title="Cache Aggressively">
+    Embeddings are deterministic - cache them and only regenerate when content changes.
+  </Step>
+  
+  <Step title="Optimize Queries">
+    Use similarity thresholds to reduce the search space in large datasets.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/chat">
+    Build conversational AI with multi-turn conversations
+  </Card>
+  
+  <Card title="Extraction" icon="file-pdf" href="/extraction">
+    Extract structured data from documents
+  </Card>
+  
+  <Card title="Streaming" icon="bolt" href="/streaming">
+    Implement real-time streaming responses
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/magic">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

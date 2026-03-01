@@ -1,0 +1,371 @@
+---
+title: "Prebuilt Tools"
+description: "Ready-to-use tools for common operations"
+---
+
+## Overview
+
+LLM Magic includes several prebuilt tools for common operations like extraction, mathematical calculations, and data manipulation.
+
+## Extract
+
+The `Extract` tool is used to output structured data according to a defined JSON schema. This is the primary way to extract structured information from unstructured text.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Extract;
+
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'name' => ['type' => 'string'],
+        'age' => ['type' => 'integer'],
+        'email' => ['type' => 'string', 'format' => 'email'],
+    ],
+    'required' => ['name', 'email'],
+];
+
+Magic::chat()
+    ->tools(new Extract($schema))
+    ->prompt('Extract contact info: John Doe, 30 years old, john@example.com')
+    ->ask();
+```
+
+### Constructor
+
+<ParamField path="schema" type="array" required>
+  The JSON schema that defines the structure of data to extract
+</ParamField>
+
+### Behavior
+
+When invoked, the Extract tool ends the chat session and returns the extracted data. The tool validates the extracted data against the provided schema.
+
+## MagicReturnTool
+
+A flexible tool for returning values of specific types. Useful when you want the LLM to return a simple value.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\MagicReturnTool;
+
+// Return a string
+$result = Magic::chat()
+    ->tools(new MagicReturnTool('string'))
+    ->prompt('Summarize this in one sentence: [long text]')
+    ->ask();
+
+// Return a number
+$result = Magic::chat()
+    ->tools(new MagicReturnTool('number'))
+    ->prompt('How many words are in this text?')
+    ->ask();
+
+// Return a boolean
+$result = Magic::chat()
+    ->tools(new MagicReturnTool('boolean'))
+    ->prompt('Is this text positive in sentiment?')
+    ->ask();
+```
+
+### Constructor
+
+<ParamField path="type" type="string" required>
+  The type of value to return: `string`, `number`, `integer`, `boolean`, `array`, or `object`
+</ParamField>
+
+<ParamField path="schema" type="array" optional>
+  Additional schema constraints for the returned value
+</ParamField>
+
+### Supported Types
+
+- `string` - Returns a string value
+- `number` - Returns a float value
+- `integer` - Returns an integer value
+- `boolean` - Returns a boolean value
+- `array` - Returns an array (can specify item schema)
+- `object` - Returns an object (provide full schema)
+
+```php
+// Return an array of strings
+new MagicReturnTool('array', ['type' => 'string'])
+
+// Return an object
+new MagicReturnTool('object', [
+    'type' => 'object',
+    'properties' => [
+        'summary' => ['type' => 'string'],
+        'wordCount' => ['type' => 'integer'],
+    ],
+])
+```
+
+## Add
+
+A simple tool for adding two numbers.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Add;
+
+Magic::chat()
+    ->tools(new Add())
+    ->prompt('What is 15 plus 27?')
+    ->ask();
+```
+
+### Parameters
+
+<ParamField path="a" type="number" required>
+  The first number to add
+</ParamField>
+
+<ParamField path="b" type="number" required>
+  The second number to add
+</ParamField>
+
+### Returns
+
+The sum of `a` and `b`.
+
+## Multiply
+
+A simple tool for multiplying two numbers.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Multiply;
+
+Magic::chat()
+    ->tools(new Multiply())
+    ->prompt('What is 6 times 7?')
+    ->ask();
+```
+
+### Parameters
+
+<ParamField path="a" type="number" required>
+  The first number to multiply
+</ParamField>
+
+<ParamField path="b" type="number" required>
+  The second number to multiply
+</ParamField>
+
+### Returns
+
+The product of `a` and `b`.
+
+## Finish
+
+Outputs a final text message and ends the conversation.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Finish;
+
+Magic::chat()
+    ->tools(new Finish())
+    ->prompt('Generate a conclusion for this essay')
+    ->ask();
+```
+
+### Parameters
+
+<ParamField path="text" type="string" optional>
+  The final message to output
+</ParamField>
+
+## MergeData
+
+Merges multiple data sources together according to a schema.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\MergeData;
+
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'products' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => ['type' => 'string'],
+                    'price' => ['type' => 'number'],
+                ],
+            ],
+        ],
+    ],
+];
+
+Magic::chat()
+    ->tools(new MergeData($schema))
+    ->prompt('Merge these product lists: [data1] and [data2]')
+    ->ask();
+```
+
+### Constructor
+
+<ParamField path="schema" type="array" required>
+  The JSON schema defining the structure of merged data
+</ParamField>
+
+## ModifyData
+
+Modifies data according to instructions.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\ModifyData;
+
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'items' => [
+            'type' => 'array',
+            'items' => ['type' => 'object'],
+        ],
+    ],
+];
+
+Magic::chat()
+    ->tools(new ModifyData($schema))
+    ->prompt('Modify the data to add a "category" field to each item')
+    ->ask();
+```
+
+### Constructor
+
+<ParamField path="schema" type="array" required>
+  The JSON schema defining the structure of modified data
+</ParamField>
+
+## RemoveDuplicates
+
+Removes duplicate entries from arrays in a dataset.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\RemoveDuplicates;
+
+Magic::chat()
+    ->tools(new RemoveDuplicates())
+    ->prompt('Remove duplicates from the products list')
+    ->ask();
+```
+
+### Parameters
+
+<ParamField path="keys" type="array" required>
+  Array of dot-notated keys indicating which arrays to deduplicate. Uses 0-based indices.
+  
+  Example: `["products.0", "categories.17"]`
+</ParamField>
+
+### Returns
+
+Returns the keys to deduplicate. The actual deduplication is handled by your application code.
+
+## OutputJsonSchema
+
+Generates a JSON schema based on natural language instructions.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\OutputJsonSchema;
+
+Magic::chat()
+    ->tools(new OutputJsonSchema())
+    ->prompt('Create a schema for a user profile with name, email, age, and address')
+    ->ask();
+```
+
+### Returns
+
+<ParamField path="schema" type="object" required>
+  The generated JSON schema. Must be a JSON object at the root level.
+  
+  **Properties:**
+  - `type` (string) - Must be "object"
+  - `properties` (object) - The schema properties
+  - `required` (array) - Array of required property names
+</ParamField>
+
+## OutputStepLabels
+
+Generates UI labels for a multi-step process.
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\OutputStepLabels;
+
+Magic::chat()
+    ->tools(new OutputStepLabels())
+    ->prompt('Create UI labels for a product extraction wizard')
+    ->ask();
+```
+
+### Returns
+
+Returns an object with labels for:
+
+<ParamField path="introduction_view_heading" type="string" required>
+  Heading for the introduction view
+</ParamField>
+
+<ParamField path="introduction_view_description" type="string" required>
+  Description for the introduction view
+</ParamField>
+
+<ParamField path="introduction_view_next_button_label" type="string" required>
+  Label for the next button
+</ParamField>
+
+<ParamField path="bucket_view_heading" type="string" required>
+  Heading for the bucket view
+</ParamField>
+
+<ParamField path="bucket_view_description" type="string" required>
+  Description for the bucket view
+</ParamField>
+
+<ParamField path="bucket_view_back_button_label" type="string" required>
+  Label for the back button
+</ParamField>
+
+<ParamField path="bucket_view_begin_button_label" type="string" required>
+  Label for the begin button
+</ParamField>
+
+<ParamField path="bucket_view_continue_button_label" type="string" required>
+  Label for the continue button
+</ParamField>
+
+<ParamField path="extraction_view_heading" type="string" required>
+  Heading for the extraction view
+</ParamField>
+
+<ParamField path="extraction_view_description" type="string" required>
+  Description for the extraction view
+</ParamField>
+
+<ParamField path="extraction_view_back_button_label" type="string" required>
+  Label for the back button
+</ParamField>
+
+<ParamField path="extraction_view_continue_button_label" type="string" required>
+  Label for the continue button
+</ParamField>
+
+<ParamField path="extraction_view_restart_button_label" type="string" required>
+  Label for the restart button
+</ParamField>
+
+<ParamField path="results_view_heading" type="string" required>
+  Heading for the results view
+</ParamField>
+
+<ParamField path="results_view_description" type="string" required>
+  Description for the results view
+</ParamField>
+
+<ParamField path="results_view_back_button_label" type="string" required>
+  Label for the back button
+</ParamField>
+
+<ParamField path="results_view_next_button_label" type="string" required>
+  Label for the next button
+</ParamField>

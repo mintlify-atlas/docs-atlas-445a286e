@@ -1,0 +1,561 @@
+---
+title: 'Livewire Integration'
+description: 'Build interactive chat interfaces with Laravel Livewire and LLM Magic'
+---
+
+## Overview
+
+LLM Magic provides seamless integration with Laravel Livewire to create reactive, real-time chat interfaces. Build chatbots and AI assistants with minimal code.
+
+<Note>
+Livewire integration is currently experimental and under active development. The API may change in future versions.
+</Note>
+
+## Basic Livewire Chat Component
+
+Create an interactive chat component using the `HasChat` interface and `InteractsWithChat` trait:
+
+```php
+<?php
+
+use Livewire\Component;
+use Mateffy\Magic;
+use Mateffy\Magic\Livewire\HasChat;
+use Mateffy\Magic\Livewire\InteractsWithChat;
+
+class LivewireChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('google/gemini-2.0-flash-lite')
+            ->system('You are a helpful assistant.');
+    }
+
+    public function render()
+    {
+        return view('livewire.chat');
+    }
+}
+```
+
+## Adding Custom Tools
+
+Extend your chat with custom tool capabilities:
+
+```php
+class LivewireChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function getMagic()
+    {
+        return static::makeMagic()
+            ->model('google/gemini-2.0-flash-lite')
+            ->system('You are a Leuphana University assistant. You know a lot about courses, schedules, and campus information.');
+    }
+
+    protected static function getTools(): array
+    {
+        return [
+            // Simple closure tool
+            'getCurrentTime' => fn () => now()->toTimeString(),
+
+            // Tool with parameters
+            'searchCourses' => function (string $query, ?string $department = null) {
+                return Course::query()
+                    ->where('name', 'like', "%{$query}%")
+                    ->when($department, fn ($q) => $q->where('department', $department))
+                    ->get()
+                    ->toArray();
+            },
+
+            // Tool with file access
+            'findFileInDownloads' => function (string $search) {
+                $files = Storage::disk('downloads')->allFiles();
+                
+                return [
+                    'files' => array_filter($files, fn ($file) => 
+                        str_contains($file, $search)
+                    )
+                ];
+            },
+        ];
+    }
+}
+```
+
+## Tool with Widget Display
+
+Create tools that render custom UI components:
+
+```php
+use Mateffy\Magic\Tools\Widgets\ClosureToolWidget;
+
+protected static function getTools(): array
+{
+    return [
+        Tool::make('makeSandwich')
+            ->widget(ClosureToolWidget::make(fn () => '<p>You just made a sandwich!</p>'))
+            ->callback(function (string $bread, string $filling) {
+                return [
+                    'sandwich' => "A sandwich with {$bread} and {$filling}."
+                ];
+            }),
+    ];
+}
+```
+
+<Info>
+Widgets allow you to display rich UI feedback when tools are executed, enhancing the user experience.
+</Info>
+
+## Eloquent Model Integration
+
+Give your chat access to database operations:
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\EloquentTools;
+
+class ProductAssistant extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    protected static function getTools(): array
+    {
+        return [
+            // Full CRUD for products
+            ...EloquentTools::crud(\App\Models\Product::class),
+
+            // Read-only access to orders
+            ...EloquentTools::crud(
+                model: \App\Models\Order::class,
+                create: false,
+                update: false,
+                delete: false,
+            ),
+        ];
+    }
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('anthropic/claude-3-5-sonnet-latest')
+            ->system('You are a product management assistant. You can query, create, update, and delete products as requested.');
+    }
+}
+```
+
+<Warning>
+**Security Notice:** When exposing CRUD operations to LLMs, always implement proper authorization and validation. Consider using Laravel policies to restrict access.
+</Warning>
+
+## Streaming Responses
+
+Provide real-time feedback as the LLM generates responses:
+
+```php
+class StreamingChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('openai/gpt-4o')
+            ->onMessageProgress(function ($message) {
+                // Update UI in real-time
+                $this->dispatch('message-chunk', [
+                    'content' => $message->content
+                ]);
+            });
+    }
+}
+```
+
+## Handling File Uploads
+
+Process uploaded files in your chat:
+
+```php
+use Livewire\WithFileUploads;
+
+class DocumentChat extends Component implements HasChat
+{
+    use InteractsWithChat, WithFileUploads;
+
+    public $document;
+
+    public function getMagic()
+    {
+        $artifacts = [];
+        
+        if ($this->document) {
+            $artifacts[] = Magic\Extraction\Artifacts\Artifact::fromFile(
+                $this->document->getRealPath()
+            );
+        }
+
+        return Magic::chat()
+            ->model('google/gemini-2.0-flash')
+            ->system('You are a document analysis assistant.')
+            ->artifacts($artifacts);
+    }
+}
+```
+
+## Multi-Modal Chat
+
+Handle images, audio, and other media types:
+
+```php
+use Mateffy\Magic\Chat\Messages\Step;
+
+class VisionChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function analyzeImage(string $imageUrl)
+    {
+        $this->addMessage(
+            Step::user([
+                Step\Text::make('What is in this image?'),
+                Step\Image::make($imageUrl),
+            ])
+        );
+
+        $this->sendMessage();
+    }
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('google/gemini-2.0-flash')  // Vision-capable model
+            ->system('You are a vision analysis assistant.');
+    }
+}
+```
+
+## Conversation History
+
+Manage and persist conversation state:
+
+```php
+class PersistentChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public $conversationId;
+
+    public function mount()
+    {
+        // Load previous messages
+        $conversation = Conversation::find($this->conversationId);
+        
+        foreach ($conversation->messages as $message) {
+            $this->messages[] = $message->toMagicMessage();
+        }
+    }
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('openai/gpt-4o')
+            ->messages($this->messages)  // Include history
+            ->onMessage(function ($message) {
+                // Save each message
+                Conversation::find($this->conversationId)
+                    ->messages()
+                    ->create([
+                        'role' => $message->role,
+                        'content' => $message->content,
+                    ]);
+            });
+    }
+}
+```
+
+## Error Handling
+
+Handle errors gracefully in your Livewire components:
+
+```php
+class RobustChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public $error = null;
+
+    public function getMagic()
+    {
+        return Magic::chat()
+            ->model('openai/gpt-4o')
+            ->onToolError(function (\Throwable $e) {
+                $this->error = $e->getMessage();
+                $this->dispatch('chat-error', ['message' => $e->getMessage()]);
+            });
+    }
+
+    public function sendMessage()
+    {
+        $this->error = null;
+        
+        try {
+            parent::sendMessage();
+        } catch (\Exception $e) {
+            $this->error = 'Failed to send message: ' . $e->getMessage();
+        }
+    }
+}
+```
+
+## Rate Limiting
+
+Protect your application from excessive API usage:
+
+```php
+use Illuminate\Support\Facades\RateLimiter;
+
+class RateLimitedChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function sendMessage()
+    {
+        $key = 'chat:' . auth()->id();
+
+        if (RateLimiter::tooManyAttempts($key, 10)) {
+            $this->addError('Too many requests. Please wait before sending more messages.');
+            return;
+        }
+
+        RateLimiter::hit($key, 60);  // 10 requests per minute
+
+        parent::sendMessage();
+    }
+}
+```
+
+## Advanced: Custom Message Handling
+
+Override default message processing:
+
+```php
+class CustomChat extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    protected function processMessage($message)
+    {
+        // Add custom pre-processing
+        $message = $this->sanitizeMessage($message);
+        $message = $this->addContext($message);
+
+        return parent::processMessage($message);
+    }
+
+    protected function sanitizeMessage($message)
+    {
+        // Remove sensitive information
+        return preg_replace('/\b\d{16}\b/', '[REDACTED]', $message);
+    }
+
+    protected function addContext($message)
+    {
+        // Add user context
+        return "User #{$this->user->id}: {$message}";
+    }
+}
+```
+
+## Blade Template Example
+
+Create the UI for your chat component:
+
+```blade chat.blade.php
+<div class="chat-container">
+    <div class="messages">
+        @foreach ($messages as $message)
+            <div class="message {{ $message->role }}">
+                <div class="content">{{ $message->content }}</div>
+            </div>
+        @endforeach
+    </div>
+
+    @if ($error)
+        <div class="alert alert-error">
+            {{ $error }}
+        </div>
+    @endif
+
+    <form wire:submit="sendMessage">
+        <input 
+            type="text" 
+            wire:model="prompt" 
+            placeholder="Type your message..."
+            class="chat-input"
+        />
+        <button type="submit" class="send-button">
+            Send
+        </button>
+    </form>
+</div>
+```
+
+## Integration Patterns
+
+<CardGroup cols={2}>
+  <Card title="Simple Q&A" icon="comment">
+    Basic chatbot without tools
+    
+    **Use case:** FAQ bot, simple assistant
+  </Card>
+  
+  <Card title="Database Assistant" icon="database">
+    Chat with Eloquent tool access
+    
+    **Use case:** Admin panels, data queries
+  </Card>
+  
+  <Card title="Document Analyzer" icon="file">
+    File upload with extraction
+    
+    **Use case:** PDF analysis, form processing
+  </Card>
+  
+  <Card title="Vision Assistant" icon="image">
+    Image analysis and description
+    
+    **Use case:** Product recognition, accessibility
+  </Card>
+</CardGroup>
+
+## Performance Tips
+
+<AccordionGroup>
+  <Accordion title="Lazy Loading">
+    Load conversation history on demand:
+    
+    ```php
+    public function loadMore()
+    {
+        $this->messages = array_merge(
+            $this->getOlderMessages(),
+            $this->messages
+        );
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Message Batching">
+    Group multiple messages before processing:
+    
+    ```php
+    public $messageQueue = [];
+    
+    public function queueMessage($message)
+    {
+        $this->messageQueue[] = $message;
+    }
+    
+    public function processBatch()
+    {
+        foreach ($this->messageQueue as $message) {
+            $this->processMessage($message);
+        }
+        $this->messageQueue = [];
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Debouncing">
+    Prevent excessive API calls:
+    
+    ```php
+    public function updatedPrompt()
+    {
+        $this->dispatch('debounce-input');
+    }
+    ```
+    
+    ```js
+    Livewire.on('debounce-input', () => {
+        clearTimeout(this.timeout);
+        this.timeout = setTimeout(() => {
+            Livewire.dispatch('process-input');
+        }, 500);
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example: Complete Chat Component
+
+```php
+<?php
+
+namespace App\Livewire;
+
+use Livewire\Component;
+use Mateffy\Magic;
+use Mateffy\Magic\Livewire\HasChat;
+use Mateffy\Magic\Livewire\InteractsWithChat;
+use Mateffy\Magic\Tools\Prebuilt\EloquentTools;
+
+class UniversityAssistant extends Component implements HasChat
+{
+    use InteractsWithChat;
+
+    public function getMagic()
+    {
+        return static::makeMagic()
+            ->model('google/gemini-2.0-flash-lite')
+            ->system(<<<SYSTEM
+                You are a helpful university assistant.
+                You can help with course information, schedules, and general questions.
+                Be friendly and concise in your responses.
+                SYSTEM);
+    }
+
+    protected static function getTools(): array
+    {
+        return [
+            // Course database access
+            ...EloquentTools::crud(
+                model: \App\Models\Course::class,
+                create: false,
+                update: false,
+                delete: false,
+            ),
+
+            // Custom search function
+            'searchCampusEvents' => function (string $query, ?string $date = null) {
+                return \App\Models\Event::query()
+                    ->where('title', 'like', "%{$query}%")
+                    ->when($date, fn ($q) => $q->whereDate('date', $date))
+                    ->limit(5)
+                    ->get()
+                    ->toArray();
+            },
+
+            // Get current academic term
+            'getCurrentTerm' => fn () => [
+                'term' => config('university.current_term'),
+                'start_date' => config('university.term_start'),
+                'end_date' => config('university.term_end'),
+            ],
+        ];
+    }
+
+    public function render()
+    {
+        return view('livewire.university-assistant');
+    }
+}
+```
+
+<Tip>
+The `InteractsWithChat` trait handles message streaming, tool execution, and state management automatically.
+</Tip>

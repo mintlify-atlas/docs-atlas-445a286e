@@ -1,0 +1,156 @@
+---
+title: OpenAI Provider
+description: Use OpenAI's GPT models including GPT-4o, o1, and o3 series with LLM Magic
+---
+
+# OpenAI Provider
+
+The OpenAI provider gives you access to OpenAI's latest language models, including the GPT-4o series and advanced reasoning models like o1 and o3.
+
+## Configuration
+
+### API Key Setup
+
+Set your OpenAI API key in your `.env` file:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+OPENAI_ORGANIZATION_ID=your_org_id_here  # Optional
+```
+
+The API key configuration is defined in `config/llm-magic.php`:
+
+```php
+'apis' => [
+    'openai' => [
+        'token' => env('OPENAI_API_KEY'),
+        'organization_id' => env('OPENAI_ORGANIZATION_ID'),
+    ],
+]
+```
+
+## Available Models
+
+LLM Magic supports the following OpenAI models:
+
+### Reasoning Models
+
+- **o1** - Advanced reasoning model
+- **o1-pro** - Professional tier reasoning model
+- **o3-mini** - Compact o3 model
+- **o3** - Latest reasoning model
+- **o4-mini** - Compact o4 model
+
+### GPT-4 Series
+
+- **gpt-4-turbo** - GPT-4 Turbo
+- **gpt-4o** - GPT-4 Optimized
+- **gpt-4o-mini** - Compact GPT-4o model
+
+## Usage
+
+### Using the Constructor
+
+Create an OpenAI model instance with any model name:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$model = new OpenAI(
+    model: 'gpt-4o',
+    options: new ChatGptOptions
+);
+```
+
+### Using Static Factory Methods
+
+LLM Magic provides convenient static methods for common models:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+
+// GPT-4o Mini - fastest and most cost-effective
+$model = OpenAI::gpt_4o_mini();
+
+// GPT-4o - balanced performance
+$model = OpenAI::gpt_4o();
+
+// GPT-4 Turbo - high performance
+$model = OpenAI::gpt_4_turbo();
+
+// o1 models - advanced reasoning
+$model = OpenAI::o1_mini();
+$model = OpenAI::o1_preview();
+```
+
+### Getting Available Models
+
+Retrieve a list of all available OpenAI models:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+
+$models = OpenAI::models();
+// Returns a Collection with prefixed model names like 'openai/gpt-4o'
+
+$models = OpenAI::models(prefix: null, prefixLabels: null);
+// Returns models without prefix
+```
+
+## Model Costs
+
+OpenAI models include built-in cost tracking. The following pricing is configured (per 1,000 tokens):
+
+| Model | Input Cost | Output Cost |
+|-------|-----------|-------------|
+| o1 | $0.015 | $0.075 |
+| o1-pro | $0.003 | $0.015 |
+| o3-mini | $0.0008 | $0.004 |
+| o3 | $0.0008 | $0.004 |
+| o4-mini | $0.0008 | $0.004 |
+| gpt-4-turbo | $0.0008 | $0.004 |
+| gpt-4o | $0.0008 | $0.004 |
+| gpt-4o-mini | $0.0008 | $0.004 |
+
+Access cost information programmatically:
+
+```php
+$model = OpenAI::gpt_4o();
+$cost = $model->getModelCost();
+
+if ($cost) {
+    echo "Input: {$cost->inputCentsPer1K} cents per 1K tokens";
+    echo "Output: {$cost->outputCentsPer1K} cents per 1K tokens";
+}
+```
+
+## Organization Info
+
+The OpenAI provider includes organization metadata:
+
+- **ID**: `openai`
+- **Name**: OpenAI
+- **Website**: https://openai.com
+- **Privacy**: Data may be used for model training and abuse prevention
+
+## Advanced Options
+
+You can pass additional options using `ChatGptOptions`:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$options = new ChatGptOptions(
+    // Configure temperature, max tokens, etc.
+);
+
+$model = new OpenAI('gpt-4o', $options);
+```
+
+## See Also
+
+- [Configuration](/configuration/api-keys)
+- [Model Options](/api/options)
+- [Chat Completion](/guides/chat-completion)

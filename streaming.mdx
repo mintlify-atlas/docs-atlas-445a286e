@@ -1,0 +1,553 @@
+---
+title: Streaming Responses
+description: Implement real-time streaming responses for better user experience using the ->stream() method
+---
+
+## Overview
+
+Streaming allows your application to receive and display AI responses in real-time as they're generated, rather than waiting for the complete response. This creates a much better user experience, especially for long responses.
+
+## Quick Start
+
+### Basic Streaming
+
+Use the `stream()` method instead of `send()` to enable streaming:
+
+```php
+use Mateffy\Magic;
+
+$messages = Magic::chat()
+    ->prompt('Write a short story about a robot')
+    ->stream();
+
+// The response is streamed in real-time
+// Access the complete text after streaming finishes
+echo $messages->text();
+```
+
+### Difference: stream() vs send()
+
+```php
+// Without streaming - waits for complete response
+$messages = Magic::chat()
+    ->prompt('Explain quantum computing')
+    ->send(); // Blocks until complete
+
+// With streaming - receives response in chunks
+$messages = Magic::chat()
+    ->prompt('Explain quantum computing')
+    ->stream(); // Returns chunks as they arrive
+```
+
+## Real-time Progress
+
+### onMessageProgress Callback
+
+Receive chunks as they arrive:
+
+```php
+Magic::chat()
+    ->prompt('Write a long article about AI')
+    ->onMessageProgress(function ($message) {
+        // Called for each chunk during streaming
+        echo $message->text();
+        flush(); // Send to browser immediately
+    })
+    ->stream();
+```
+
+### Complete Message Callback
+
+Get notified when complete messages are received:
+
+```php
+Magic::chat()
+    ->prompt('Explain machine learning')
+    ->onMessage(function ($message) {
+        // Called when a complete message is received
+        logger()->info('Complete message received', [
+            'type' => get_class($message),
+            'content' => $message->text(),
+        ]);
+    })
+    ->stream();
+```
+
+## Streaming in Web Applications
+
+### Laravel HTTP Streaming
+
+Stream responses directly to the browser:
+
+```php
+use Illuminate\Http\Request;
+use Mateffy\Magic;
+
+Route::get('/api/chat/stream', function (Request $request) {
+    return response()->stream(function () use ($request) {
+        $prompt = $request->input('prompt');
+        
+        Magic::chat()
+            ->prompt($prompt)
+            ->onMessageProgress(function ($message) {
+                echo "data: " . json_encode([
+                    'text' => $message->text(),
+                ]) . "\n\n";
+                
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+            })
+            ->stream();
+        
+        echo "data: [DONE]\n\n";
+    }, 200, [
+        'Content-Type' => 'text/event-stream',
+        'Cache-Control' => 'no-cache',
+        'X-Accel-Buffering' => 'no',
+    ]);
+});
+```
+
+### JavaScript Client (Server-Sent Events)
+
+Consume the stream in your frontend:
+
+```javascript
+const eventSource = new EventSource('/api/chat/stream?prompt=' + encodeURIComponent(prompt));
+const outputDiv = document.getElementById('output');
+
+eventSource.onmessage = (event) => {
+    if (event.data === '[DONE]') {
+        eventSource.close();
+        return;
+    }
+    
+    const data = JSON.parse(event.data);
+    outputDiv.textContent += data.text;
+};
+
+eventSource.onerror = (error) => {
+    console.error('Stream error:', error);
+    eventSource.close();
+};
+```
+
+### React Example
+
+Use streaming in a React component:
+
+```jsx
+import { useState, useEffect } from 'react';
+
+function ChatInterface() {
+    const [output, setOutput] = useState('');
+    const [loading, setLoading] = useState(false);
+    
+    const streamResponse = async (prompt) => {
+        setLoading(true);
+        setOutput('');
+        
+        const eventSource = new EventSource(
+            `/api/chat/stream?prompt=${encodeURIComponent(prompt)}`
+        );
+        
+        eventSource.onmessage = (event) => {
+            if (event.data === '[DONE]') {
+                eventSource.close();
+                setLoading(false);
+                return;
+            }
+            
+            const data = JSON.parse(event.data);
+            setOutput(prev => prev + data.text);
+        };
+        
+        eventSource.onerror = () => {
+            eventSource.close();
+            setLoading(false);
+        };
+    };
+    
+    return (
+        <div>
+            <div className="output">{output}</div>
+            {loading && <div className="loading">Streaming...</div>}
+        </div>
+    );
+}
+```
+
+## Streaming with Tool Calls
+
+Streaming works seamlessly with tool calls:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+Magic::chat()
+    ->messages([
+        Step::user('What is the weather in Paris?'),
+    ])
+    ->tools([
+        'get_weather' => function (string $city) {
+            // This executes during the stream
+            return WeatherAPI::get($city);
+        },
+    ])
+    ->onMessageProgress(function ($message) {
+        // Shows both text and tool call progress
+        echo $message->text();
+        flush();
+    })
+    ->stream();
+```
+
+### Tool Call Progress
+
+Monitor tool execution during streaming:
+
+```php
+Magic::chat()
+    ->messages([Step::user('Search for flights to Paris')])
+    ->tools([
+        'search_flights' => function (string $destination) {
+            echo "[Searching flights to {$destination}...]\n";
+            flush();
+            
+            $results = FlightAPI::search($destination);
+            
+            echo "[Found {$results->count()} flights]\n";
+            flush();
+            
+            return $results;
+        },
+    ])
+    ->onMessageProgress(function ($message) {
+        echo $message->text();
+        flush();
+    })
+    ->stream();
+```
+
+## Advanced Streaming
+
+### Custom Data Packets
+
+Access raw streaming data:
+
+```php
+Magic::chat()
+    ->prompt('Write a story')
+    ->onDataPacket(function ($packet) {
+        // Raw data from the LLM provider
+        logger()->debug('Stream packet', ['packet' => $packet]);
+    })
+    ->stream();
+```
+
+### Token Statistics During Streaming
+
+Track token usage as the response streams:
+
+```php
+Magic::chat()
+    ->prompt('Explain quantum physics')
+    ->onTokenStats(function ($stats) {
+        echo "Tokens used: {$stats['total_tokens']}\n";
+        flush();
+    })
+    ->stream();
+```
+
+### Error Handling
+
+Handle errors during streaming:
+
+```php
+try {
+    Magic::chat()
+        ->prompt('Your prompt here')
+        ->onMessageProgress(function ($message) {
+            echo $message->text();
+            flush();
+        })
+        ->stream();
+} catch (\Throwable $e) {
+    echo "Stream error: {$e->getMessage()}\n";
+    logger()->error('Stream failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+}
+```
+
+## Complete Streaming Example
+
+Here's a complete Laravel controller with streaming:
+
+```php
+use Illuminate\Http\Request;
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+class ChatController extends Controller
+{
+    public function stream(Request $request)
+    {
+        $validated = $request->validate([
+            'messages' => 'required|array',
+            'model' => 'string|nullable',
+        ]);
+        
+        return response()->stream(function () use ($validated) {
+            $messages = collect($validated['messages'])
+                ->map(fn($msg) => match($msg['role']) {
+                    'user' => Step::user($msg['content']),
+                    'assistant' => Step::assistant($msg['content']),
+                })
+                ->toArray();
+            
+            try {
+                Magic::chat()
+                    ->model($validated['model'] ?? 'google/gemini-2.0-flash-lite')
+                    ->messages($messages)
+                    ->tools([
+                        'search' => function (string $query) {
+                            $this->sendEvent('tool_call', [
+                                'tool' => 'search',
+                                'query' => $query,
+                            ]);
+                            
+                            $results = SearchService::search($query);
+                            
+                            $this->sendEvent('tool_result', [
+                                'tool' => 'search',
+                                'count' => count($results),
+                            ]);
+                            
+                            return $results;
+                        },
+                    ])
+                    ->onMessageProgress(function ($message) {
+                        $this->sendEvent('message', [
+                            'text' => $message->text(),
+                        ]);
+                    })
+                    ->onTokenStats(function ($stats) {
+                        $this->sendEvent('tokens', $stats);
+                    })
+                    ->stream();
+                
+                $this->sendEvent('done', ['status' => 'complete']);
+            } catch (\Throwable $e) {
+                $this->sendEvent('error', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+    
+    private function sendEvent(string $type, array $data): void
+    {
+        echo "event: {$type}\n";
+        echo "data: " . json_encode($data) . "\n\n";
+        
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+        flush();
+    }
+}
+```
+
+### Frontend for Complete Example
+
+```javascript
+class ChatClient {
+    constructor(endpoint) {
+        this.endpoint = endpoint;
+        this.eventSource = null;
+    }
+    
+    stream(messages, callbacks = {}) {
+        const params = new URLSearchParams({
+            messages: JSON.stringify(messages),
+        });
+        
+        this.eventSource = new EventSource(`${this.endpoint}?${params}`);
+        
+        this.eventSource.addEventListener('message', (e) => {
+            const data = JSON.parse(e.data);
+            callbacks.onMessage?.(data);
+        });
+        
+        this.eventSource.addEventListener('tool_call', (e) => {
+            const data = JSON.parse(e.data);
+            callbacks.onToolCall?.(data);
+        });
+        
+        this.eventSource.addEventListener('tool_result', (e) => {
+            const data = JSON.parse(e.data);
+            callbacks.onToolResult?.(data);
+        });
+        
+        this.eventSource.addEventListener('tokens', (e) => {
+            const data = JSON.parse(e.data);
+            callbacks.onTokens?.(data);
+        });
+        
+        this.eventSource.addEventListener('done', (e) => {
+            this.eventSource.close();
+            callbacks.onDone?.();
+        });
+        
+        this.eventSource.addEventListener('error', (e) => {
+            const data = JSON.parse(e.data);
+            this.eventSource.close();
+            callbacks.onError?.(data);
+        });
+    }
+    
+    stop() {
+        this.eventSource?.close();
+    }
+}
+
+// Usage
+const client = new ChatClient('/api/chat/stream');
+
+client.stream(
+    [
+        { role: 'user', content: 'Tell me about Paris' },
+    ],
+    {
+        onMessage: (data) => {
+            document.getElementById('output').textContent += data.text;
+        },
+        onToolCall: (data) => {
+            console.log('Tool called:', data.tool, data.query);
+        },
+        onToolResult: (data) => {
+            console.log('Tool result:', data);
+        },
+        onTokens: (data) => {
+            document.getElementById('token-count').textContent = 
+                `Tokens: ${data.total_tokens}`;
+        },
+        onDone: () => {
+            console.log('Stream complete');
+        },
+        onError: (data) => {
+            console.error('Stream error:', data.message);
+        },
+    }
+);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always Use Streaming" icon="bolt">
+    Use `stream()` for better UX, especially for responses longer than a few sentences.
+  </Card>
+  
+  <Card title="Flush Output" icon="water">
+    Call `flush()` after echoing content to ensure immediate browser delivery.
+  </Card>
+  
+  <Card title="Handle Errors" icon="shield">
+    Wrap streaming in try-catch and provide user feedback on errors.
+  </Card>
+  
+  <Card title="Set Headers" icon="file-code">
+    Use proper headers for Server-Sent Events: `text/event-stream` and `no-cache`.
+  </Card>
+</CardGroup>
+
+## Performance Considerations
+
+<Steps>
+  <Step title="Disable Output Buffering">
+    Set `X-Accel-Buffering: no` header to prevent proxy buffering.
+  </Step>
+  
+  <Step title="Monitor Connection">
+    Check if the client disconnects to stop unnecessary processing.
+  </Step>
+  
+  <Step title="Optimize Chunk Size">
+    Balance between responsiveness and overhead - very small chunks increase overhead.
+  </Step>
+  
+  <Step title="Rate Limiting">
+    Implement rate limiting on streaming endpoints to prevent abuse.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Stream Not Updating in Browser
+
+Make sure you're flushing output:
+
+```php
+echo $content;
+if (ob_get_level() > 0) {
+    ob_flush();
+}
+flush();
+```
+
+### Nginx Buffering
+
+Disable nginx buffering for streaming endpoints:
+
+```nginx
+location /api/chat/stream {
+    proxy_pass http://backend;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Connection '';
+    proxy_http_version 1.1;
+    chunked_transfer_encoding off;
+}
+```
+
+### Large Responses Timeout
+
+Increase PHP execution time for long streams:
+
+```php
+set_time_limit(300); // 5 minutes
+
+Magic::chat()
+    ->prompt('Write a very long article')
+    ->stream();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="comments" href="/chat">
+    Learn more about the Chat API features
+  </Card>
+  
+  <Card title="Extraction" icon="file-pdf" href="/extraction">
+    Extract structured data from documents
+  </Card>
+  
+  <Card title="Embeddings" icon="vector-square" href="/embeddings">
+    Generate embeddings for semantic search
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/magic">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

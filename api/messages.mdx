@@ -1,0 +1,443 @@
+---
+title: Messages
+description: Message types for structuring conversation history and AI interactions
+---
+
+Messages represent the different types of content that can be exchanged in a conversation. LLM Magic provides several message types to handle text, structured data, tool calls, and tool results.
+
+## Message Interface
+
+All message types implement the `Message` interface, which provides core functionality for conversation management.
+
+**Location:** `src/Magic/Chat/Messages/Message.php:9`
+
+### Methods
+
+- `toArray(): array` - Convert the message to an array representation
+- `fromArray(array $data): static` - Create a message instance from an array
+- `text(): ?string` - Get the text representation of the message
+- `role(): Role` - Get the role associated with this message (User, Assistant, or System)
+
+## TextMessage
+
+Simple text-based messages for standard conversation exchanges.
+
+**Location:** `src/Magic/Chat/Messages/TextMessage.php:7`
+
+### Constructor
+
+<ParamField path="role" type="Role" required>
+  The role of the message sender (User, Assistant, or System)
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  The text content of the message
+</ParamField>
+
+### Static Methods
+
+#### user()
+
+Create a user message.
+
+```php
+TextMessage::user('What is the weather today?')
+```
+
+<ParamField path="content" type="string" required>
+  The message content
+</ParamField>
+
+#### assistant()
+
+Create an assistant message.
+
+```php
+TextMessage::assistant('The weather is sunny today.')
+```
+
+<ParamField path="content" type="string" required>
+  The message content
+</ParamField>
+
+#### fromChunk()
+
+Create a message from a streaming chunk. Used for streaming responses.
+
+```php
+TextMessage::fromChunk('Hello')
+```
+
+<ParamField path="chunk" type="string" required>
+  The text chunk to create the message from
+</ParamField>
+
+### Instance Methods
+
+#### append()
+
+Append additional text to the message content. Returns the message instance for chaining.
+
+```php
+$message->append(' world!')
+```
+
+<ParamField path="chunk" type="string" required>
+  The text to append
+</ParamField>
+
+## JsonMessage
+
+Messages containing structured JSON data. Useful for extracting structured information from AI responses.
+
+**Location:** `src/Magic/Chat/Messages/JsonMessage.php:9`
+
+### Constructor
+
+<ParamField path="role" type="Role" required>
+  The role of the message sender
+</ParamField>
+
+<ParamField path="data" type="array" required>
+  The structured data as an associative array
+</ParamField>
+
+<ParamField path="partial" type="string" default="null">
+  The partial JSON string (used during streaming)
+</ParamField>
+
+### Methods
+
+#### data()
+
+Get the structured data from the message.
+
+```php
+$data = $message->data();
+```
+
+Returns the parsed JSON data as an array.
+
+#### append()
+
+Append a JSON chunk during streaming. Automatically parses partial JSON.
+
+```php
+$message->append('{"key": "val')
+```
+
+<ParamField path="chunk" type="string" required>
+  The JSON chunk to append
+</ParamField>
+
+#### fromChunk()
+
+Create a JsonMessage from a streaming chunk.
+
+```php
+JsonMessage::fromChunk('{"status":')
+```
+
+<ParamField path="chunk" type="string" required>
+  The JSON chunk
+</ParamField>
+
+## ToolCallMessage
+
+Represents a request from the AI to call a specific tool or function.
+
+**Location:** `src/Magic/Chat/Messages/ToolCallMessage.php:9`
+
+### Constructor
+
+<ParamField path="role" type="Role" required>
+  The role of the message sender (typically Assistant)
+</ParamField>
+
+<ParamField path="call" type="ToolCall" default="null">
+  The tool call details (name, arguments, id)
+</ParamField>
+
+<ParamField path="partial" type="string" default="null">
+  Partial JSON string for streaming tool calls
+</ParamField>
+
+<ParamField path="schema" type="array" default="null">
+  Optional JSON schema for validating tool arguments
+</ParamField>
+
+### Static Methods
+
+#### call()
+
+Create a tool call message from a ToolCall instance.
+
+```php
+$toolCall = new ToolCall(
+    name: 'get_weather',
+    arguments: ['location' => 'San Francisco'],
+    id: 'call_123'
+);
+ToolCallMessage::call($toolCall)
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The tool call to create a message from
+</ParamField>
+
+#### fromChunk()
+
+Create from a streaming chunk of tool call data.
+
+```php
+ToolCallMessage::fromChunk('{"name":"get_weather"')
+```
+
+<ParamField path="chunk" type="string" required>
+  The tool call JSON chunk
+</ParamField>
+
+### Methods
+
+#### data()
+
+Get the tool call arguments.
+
+```php
+$args = $message->data(); // ['location' => 'San Francisco']
+```
+
+#### append()
+
+Append tool call data during streaming. Parses partial JSON.
+
+```php
+$message->append(',"arguments":{')
+```
+
+<ParamField path="chunk" type="string" required>
+  The chunk to append
+</ParamField>
+
+#### appendFull()
+
+Append with full tool call structure parsing.
+
+```php
+$message->appendFull('{"name":"tool","parameters":{}}')
+```
+
+<ParamField path="chunk" type="string" required>
+  The chunk to append
+</ParamField>
+
+## ToolResultMessage
+
+Contains the result of a tool execution, sent back to the AI.
+
+**Location:** `src/Magic/Chat/Messages/ToolResultMessage.php:8`
+
+### Constructor
+
+<ParamField path="role" type="Role" required>
+  The role of the message sender (typically User)
+</ParamField>
+
+<ParamField path="call" type="ToolCall" required>
+  The original tool call this result corresponds to
+</ParamField>
+
+<ParamField path="output" type="mixed" required>
+  The result of the tool execution (string, array, or other data)
+</ParamField>
+
+<ParamField path="endConversation" type="bool" default="false">
+  Whether this result should end the conversation
+</ParamField>
+
+### Static Methods
+
+#### output()
+
+Create a tool result message with successful output.
+
+```php
+ToolResultMessage::output($toolCall, 'Temperature: 72°F')
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The original tool call
+</ParamField>
+
+<ParamField path="output" type="mixed" required>
+  The tool execution result
+</ParamField>
+
+#### end()
+
+Create a result that ends the conversation.
+
+```php
+ToolResultMessage::end($toolCall, 'Task completed')
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The original tool call
+</ParamField>
+
+<ParamField path="output" type="mixed" required>
+  The final output
+</ParamField>
+
+#### error()
+
+Create an error result message.
+
+```php
+ToolResultMessage::error($toolCall, 'API connection failed')
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The original tool call
+</ParamField>
+
+<ParamField path="message" type="string" required>
+  The error message
+</ParamField>
+
+#### canceled()
+
+Create a canceled tool result.
+
+```php
+ToolResultMessage::canceled($toolCall)
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The tool call that was canceled
+</ParamField>
+
+### Methods
+
+#### data()
+
+Get the output as an array (if possible).
+
+```php
+$data = $message->data();
+```
+
+#### json()
+
+Get the output as a JSON array.
+
+```php
+$json = $message->json();
+```
+
+#### withOutput()
+
+Create a new instance with different output.
+
+```php
+$newMessage = $message->withOutput(['status' => 'updated'])
+```
+
+<ParamField path="output" type="mixed" required>
+  The new output value
+</ParamField>
+
+## ToolCall
+
+Represents a single tool invocation request.
+
+**Location:** `src/Magic/Chat/Messages/ToolCall.php:8`
+
+### Constructor
+
+<ParamField path="name" type="string" required>
+  The name of the tool to call
+</ParamField>
+
+<ParamField path="arguments" type="array" required>
+  The arguments to pass to the tool
+</ParamField>
+
+<ParamField path="id" type="string" default="null">
+  Unique identifier for this tool call
+</ParamField>
+
+### Static Methods
+
+#### tryFrom()
+
+Safely create a ToolCall from an array, returning null if invalid.
+
+```php
+$toolCall = ToolCall::tryFrom($data);
+```
+
+<ParamField path="data" type="array|null">
+  The array data to create from
+</ParamField>
+
+#### fromArray()
+
+Create a ToolCall from an array.
+
+```php
+$toolCall = ToolCall::fromArray([
+    'name' => 'search',
+    'arguments' => ['query' => 'PHP'],
+    'id' => 'call_456'
+])
+```
+
+<ParamField path="data" type="array" required>
+  The array containing tool call data
+</ParamField>
+
+## DataMessage Interface
+
+Interface for messages that contain structured data.
+
+**Location:** `src/Magic/Chat/Messages/DataMessage.php:5`
+
+Implemented by `JsonMessage`, `ToolCallMessage`, and `ToolResultMessage`.
+
+### Methods
+
+- `data(): ?array` - Get the structured data from the message
+
+## PartialMessage Interface
+
+Interface for messages that support streaming updates.
+
+**Location:** `src/Magic/Chat/Messages/PartialMessage.php:5`
+
+Implemented by `TextMessage`, `JsonMessage`, and `ToolCallMessage`.
+
+### Methods
+
+- `append(string $chunk): static` - Append a chunk to the message
+- `fromChunk(string $chunk): static` - Create a message from an initial chunk
+
+## Role Enum
+
+Defines the participant roles in a conversation.
+
+**Location:** `src/Magic/Chat/Prompt/Role.php:5`
+
+### Values
+
+- `Role::User` - Messages from the user/human
+- `Role::Assistant` - Messages from the AI assistant
+- `Role::System` - System-level instructions and context
+
+### Usage
+
+```php
+use Mateffy\Magic\Chat\Prompt\Role;
+
+$message = new TextMessage(Role::User, 'Hello');
+```

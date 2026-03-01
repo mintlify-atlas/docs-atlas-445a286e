@@ -1,0 +1,100 @@
+---
+title: Installation
+description: Install LLM Magic in your Laravel application via Composer
+---
+
+# Installation
+
+LLM Magic is a Laravel package that can be installed via Composer. Follow these steps to get started.
+
+## Requirements
+
+Before installing LLM Magic, ensure your environment meets these requirements:
+
+- **PHP**: 8.3 or higher
+- **Laravel**: Any version (compatible with Laravel's latest releases)
+- **Extensions**: `ext-fileinfo` (typically included by default)
+
+<Note>
+  LLM Magic requires PHP 8.3+ to take advantage of modern PHP features and type safety.
+</Note>
+
+## Install via Composer
+
+<Steps>
+  <Step title="Install the package">
+    Run the following command in your Laravel project directory:
+
+    ```bash
+    composer require mateffy/llm-magic
+    ```
+
+    This will install LLM Magic and all its dependencies.
+  </Step>
+
+  <Step title="Publish the configuration file">
+    After installation, publish the configuration file to customize settings:
+
+    ```bash
+    php artisan vendor:publish --provider="Mateffy\\Magic\\LlmMagicServiceProvider"
+    ```
+
+    This creates a `config/llm-magic.php` file in your Laravel application.
+  </Step>
+
+  <Step title="Configure API keys">
+    Add your LLM provider API keys to your `.env` file:
+
+    ```bash
+    # OpenAI (default provider)
+    OPENAI_API_KEY=sk-...
+
+    # Other providers (optional)
+    ANTHROPIC_API_KEY=sk-ant-...
+    GEMINI_API_KEY=...
+    MISTRAL_API_KEY=...
+    OPENROUTER_API_KEY=...
+    TOGETHERAI_API_KEY=...
+    DEEPSEEK_API_KEY=...
+    GROQ_API_KEY=...
+    ```
+
+    <Note>
+      You only need to configure the API keys for the providers you plan to use. OpenAI is the default provider.
+    </Note>
+  </Step>
+
+  <Step title="Verify installation">
+    Test your installation with a simple command:
+
+    ```php
+    use Mateffy\Magic;
+
+    $answer = Magic::ask('Hello, world!');
+    echo $answer;
+    ```
+
+    If everything is configured correctly, you should receive a response from the LLM.
+  </Step>
+</Steps>
+
+## Dependencies
+
+LLM Magic automatically installs the following key dependencies:
+
+- **openai-php/client**: OpenAI API client
+- **google-gemini-php/client**: Google Gemini API client
+- **prism-php/prism**: Multi-provider LLM abstraction layer
+- **spatie/laravel-package-tools**: Laravel package utilities
+- **phpoffice/phpword**: Word document processing
+- **spatie/pdf-to-image**: PDF processing capabilities
+
+All dependencies are managed automatically by Composer.
+
+## Next Steps
+
+Now that you have LLM Magic installed, continue to the Quick Start guide to learn how to use it:
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to make your first LLM requests with Magic::ask() and Magic::chat()
+</Card>

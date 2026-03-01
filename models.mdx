@@ -1,0 +1,490 @@
+---
+title: 'Available Models'
+description: 'Explore supported LLM providers and models'
+---
+
+## Overview
+
+LLM Magic supports multiple AI providers including OpenAI, Anthropic, Google Gemini, Mistral, and OpenRouter. All models are accessed through a unified interface.
+
+## Listing Available Models
+
+Get all registered models:
+
+```php
+use Mateffy\Magic;
+
+$models = Magic::models();
+// Returns: Collection<string, string>
+// Example: ['openai/gpt-4o' => 'OpenAI GPT-4o', ...]
+```
+
+## Default Model
+
+Get or set the default model:
+
+```php
+// Get default model name
+$modelName = Magic::defaultModelName();
+// Returns: 'google/gemini-2.0-flash-lite' (from config)
+
+// Get default model label
+$label = Magic::defaultModelLabel();
+// Returns: 'Google Gemini 2.0 Flash Lite'
+
+// Get default model instance
+$model = Magic::defaultModel();
+// Returns: LLM instance
+```
+
+Configure in `config/llm-magic.php`:
+
+```php
+return [
+    'llm' => [
+        'default' => env('LLM_MAGIC_DEFAULT_MODEL', 'google/gemini-2.0-flash-lite'),
+    ],
+];
+```
+
+## OpenAI Models
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic;
+use Mateffy\Magic\Models\OpenAI;
+
+// Using model string
+Magic::chat()
+    ->model('openai/gpt-4o')
+    ->prompt('Hello!')
+    ->stream();
+
+// Using static factory
+Magic::chat()
+    ->model(OpenAI::gpt_4o())
+    ->prompt('Hello!')
+    ->stream();
+```
+
+```php Available Models
+<?php
+
+namespace Mateffy\Magic\Models;
+
+class OpenAI extends ElElEm
+{
+    public static function models(?string $prefix = 'openai', ?string $prefixLabels = 'OpenAI'): Collection
+    {
+        return static::prefixModels([
+            'o1' => 'o1',
+            'o1-pro' => 'o1 Pro',
+            'o3-mini' => 'o3 Mini',
+            'o3' => 'o3',
+            'o4-mini' => 'o4 Mini',
+            'gpt-4-turbo' => 'GPT-4 Turbo',
+            'gpt-4o' => 'GPT-4o',
+            'gpt-4o-mini' => 'GPT-4o Mini',
+        ], $prefix, $prefixLabels);
+    }
+
+    public static function gpt_4o_mini(): OpenAI
+    {
+        return new OpenAI('gpt-4o-mini');
+    }
+
+    public static function gpt_4o(): OpenAI
+    {
+        return new OpenAI('gpt-4o');
+    }
+
+    public static function gpt_4_turbo(): OpenAI
+    {
+        return new OpenAI('gpt-4-turbo');
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**API Key:** Set `OPENAI_API_KEY` in your `.env` file
+
+**Privacy:** Data may be used for model training and abuse prevention
+</Info>
+
+## Anthropic Models
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic\Models\Anthropic;
+
+Magic::chat()
+    ->model('anthropic/claude-3-5-sonnet-latest')
+    ->prompt('Explain quantum computing')
+    ->stream();
+
+// Or use constants
+Magic::chat()
+    ->model(Anthropic::sonnet_3_5())
+    ->stream();
+```
+
+```php Available Models
+<?php
+
+namespace Mateffy\Magic\Models;
+
+class Anthropic extends ElElEm
+{
+    public const HAIKU = 'claude-3-haiku-20240307';
+    public const HAIKU_3_5 = 'claude-3-5-haiku-latest';
+
+    public const SONNET = 'claude-3-sonnet-20240229';
+    public const SONNET_3_5 = 'claude-3-5-sonnet-latest';
+    public const SONNET_3_5_COMPUTER_USE = 'claude-3-5-sonnet-20241022';
+    public const SONNET_3_7 = 'claude-3-7-sonnet-latest';
+
+    public const OPUS = 'claude-3-opus-latest';
+
+    public static function models(?string $prefix = 'anthropic', ?string $prefixLabels = 'Anthropic'): Collection
+    {
+        return static::prefixModels([
+            static::HAIKU => 'Claude 3 Haiku',
+            static::SONNET => 'Claude 3 Sonnet',
+            static::OPUS => 'Claude 3 Opus',
+            static::SONNET_3_5 => 'Claude 3.5 Sonnet',
+        ], $prefix, $prefixLabels);
+    }
+
+    public static function haiku(): Anthropic
+    {
+        return new Anthropic(model: Anthropic::HAIKU);
+    }
+
+    public static function sonnet_3_5(): Anthropic
+    {
+        return new Anthropic(model: Anthropic::SONNET_3_5);
+    }
+
+    public static function opus(): Anthropic
+    {
+        return new Anthropic(model: Anthropic::OPUS);
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**API Key:** Set `ANTHROPIC_API_KEY` in your `.env` file
+
+**Pricing:** See `getModelCost()` method for per-token costs
+</Info>
+
+## Google Gemini Models
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic\Models\Gemini;
+
+Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('Analyze this image')
+    ->stream();
+
+// Factory methods
+Magic::chat()
+    ->model(Gemini::flash_2_lite())
+    ->stream();
+```
+
+```php Available Models
+<?php
+
+namespace Mateffy\Magic\Models;
+
+class Gemini extends ElElEm
+{
+    public const string GEMINI_1_5_FLASH = 'gemini-1.5-flash';
+    public const string GEMINI_1_5_FLASH_8B = 'gemini-1.5-flash-8b';
+    public const string GEMINI_1_5_PRO = 'gemini-1.5-pro';
+    public const string GEMINI_2_0_FLASH = 'gemini-2.0-flash';
+    public const string GEMINI_2_0_FLASH_LITE = 'gemini-2.0-flash-lite';
+
+    // Experimental models
+    public const string GEMINI_2_5_FLASH_PREVIEW = 'gemini-2.5-flash-preview-04-17';
+    public const string GEMINI_2_5_PRO_PREVIEW = 'gemini-2.5-pro-preview-03-25';
+    public const string GEMINI_2_5_PRO_EXPERIMENTAL = 'gemini-2.5-pro-exp-03-25';
+    public const string GEMINI_2_5_FLASH_LITE = 'gemini-2.5-flash-lite';
+    public const string GEMINI_2_5_FLASH = 'gemini-2.5-flash';
+    public const string GEMINI_2_5_PRO = 'gemini-2.5-pro';
+
+    public static function models(?string $prefix = 'google', ?string $prefixLabels = 'Google'): Collection
+    {
+        return static::prefixModels([
+            static::GEMINI_1_5_FLASH => 'Gemini 1.5 Flash',
+            static::GEMINI_2_0_FLASH => 'Gemini 2.0 Flash',
+            static::GEMINI_2_0_FLASH_LITE => 'Gemini 2.0 Flash Lite',
+            static::GEMINI_2_5_FLASH_LITE => 'Gemini 2.5 Flash Lite',
+            static::GEMINI_2_5_FLASH => 'Gemini 2.5 Flash',
+            static::GEMINI_2_5_PRO => 'Gemini 2.5 Pro',
+        ], $prefix, $prefixLabels);
+    }
+
+    public static function flash_2_lite(): static
+    {
+        return new static(model: self::GEMINI_2_0_FLASH_LITE);
+    }
+
+    public static function flash_2(): static
+    {
+        return new static(model: self::GEMINI_2_0_FLASH);
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**API Key:** Set `GOOGLE_API_KEY` in your `.env` file
+
+**Free Tier:** Available with rate limits for testing
+</Info>
+
+## Mistral Models
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic\Models\Mistral;
+
+Magic::chat()
+    ->model('mistral/mistral-large-latest')
+    ->stream();
+```
+
+```php Available Models
+<?php
+
+namespace Mateffy\Magic\Models;
+
+class Mistral extends ElElEm
+{
+    public const string MISTRAL_LARGE = 'mistral-large-latest';
+    public const string MISTRAL_MEDIUM = 'mistral-medium-latest';
+    public const string MISTRAL_SMALL = 'mistral-small-latest';
+    public const string MISTRAL_SABA = 'mistral-saba-latest';
+
+    public const string PIXTRAL_LARGE = 'pixtral-large-latest';
+    public const string PIXTRAL_12B = 'pixtral-12b-2409';
+
+    public const string CODESTRAL = 'codestral-latest';
+
+    public const string MINISTRAL_3B = 'ministral-3b-latest';
+    public const string MINISTRAL_8B = 'ministral-8b-latest';
+
+    // Research models
+    public const string MISTRAL_NEMO = 'open-mistral-nemo';
+    public const string CODESTRAL_MAMBA = 'open-codestral-mamba';
+
+    public static function models(?string $prefix = 'mistral', ?string $prefixLabels = 'Mistral'): Collection
+    {
+        return static::prefixModels([
+            static::MISTRAL_LARGE => 'Mistral Large',
+            static::MISTRAL_MEDIUM => 'Mistral Medium',
+            static::MISTRAL_SMALL => 'Mistral Small',
+            static::PIXTRAL_LARGE => 'Pixtral Large',
+            static::PIXTRAL_12B => 'Pixtral 12B',
+            static::CODESTRAL => 'Codestral',
+            static::MINISTRAL_3B => 'Ministral 3B',
+            static::MINISTRAL_8B => 'Ministral 8B',
+            static::MISTRAL_NEMO => 'Mistral Nemo (Research)',
+            static::CODESTRAL_MAMBA => 'Codestral Mamba (Research)',
+            static::MISTRAL_SABA => 'Mistral Saba',
+        ], $prefix, $prefixLabels);
+    }
+}
+```
+</CodeGroup>
+
+<Warning>
+Mistral models are limited to 8 images per call. See [Mistral Vision docs](https://docs.mistral.ai/capabilities/vision).
+</Warning>
+
+## OpenRouter Models
+
+Access multiple providers through OpenRouter:
+
+<CodeGroup>
+```php Usage
+use Mateffy\Magic\Models\OpenRouter;
+
+Magic::chat()
+    ->model('openrouter/x-ai/grok-beta')
+    ->stream();
+
+// Direct model access
+Magic::chat()
+    ->model(OpenRouter::grok())
+    ->stream();
+
+// Use any OpenRouter model
+Magic::chat()
+    ->model(OpenRouter::model('anthropic/claude-3-opus'))
+    ->stream();
+```
+
+```php Available Models
+<?php
+
+namespace Mateffy\Magic\Models;
+
+class OpenRouter extends ElElEm
+{
+    public const X_AI_GROK_BETA = 'x-ai/grok-beta';
+
+    public const GOOGLE_GEMINI_1_5_PRO = 'google/gemini-pro-1.5';
+    public const GOOGLE_GEMINI_1_5_FLASH = 'google/gemini-flash-1.5';
+
+    public const META_LLAMA_3_1_405B_INSTRUCT = 'meta-llama/llama-3.1-405b-instruct';
+    public const META_LLAMA_3_2_90B_VISION_INSTRUCT = 'meta-llama/llama-3.2-90b-vision-instruct';
+
+    public const PERPLEXITY_LLAMA_3_1_SONAR_70B_ONLINE = 'perplexity/llama-3.1-sonar-large-128k-online';
+
+    public static function model(string $model): static
+    {
+        return new static(model: $model);
+    }
+
+    public static function grok(): static
+    {
+        return new static(model: self::X_AI_GROK_BETA);
+    }
+}
+```
+</CodeGroup>
+
+<Info>
+**API Key:** Set `OPENROUTER_API_KEY` in your `.env` file
+
+**Flexibility:** Access any model from OpenRouter's catalog
+</Info>
+
+## Model Options
+
+Customize model behavior with options:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$options = new ChatGptOptions(
+    temperature: 0.7,
+    maxTokens: 2000,
+    topP: 0.9,
+);
+
+Magic::chat()
+    ->model(new OpenAI('gpt-4o', $options))
+    ->stream();
+```
+
+## Streaming vs Send
+
+Choose between streaming and batch responses:
+
+```php
+// Streaming - receive tokens as they're generated
+$messages = Magic::chat()
+    ->model('gpt-4o')
+    ->prompt('Write a story')
+    ->stream();  // Returns MessageCollection
+
+// Send - wait for complete response
+$messages = Magic::chat()
+    ->model('gpt-4o')
+    ->prompt('Write a story')
+    ->send();  // Returns MessageCollection
+```
+
+## Model Costs
+
+Check pricing for a model:
+
+```php
+use Mateffy\Magic\Models\OpenAI;
+
+$model = OpenAI::gpt_4o();
+$cost = $model->getModelCost();
+
+// Returns ModelCost instance with:
+// - inputCentsPer1K
+// - outputCentsPer1K
+```
+
+## Creating Model Instances
+
+Multiple ways to instantiate models:
+
+```php
+// 1. String notation (recommended)
+Magic::chat()->model('openai/gpt-4o')
+
+// 2. Static factory method
+Magic::chat()->model(OpenAI::gpt_4o())
+
+// 3. Direct instantiation
+Magic::chat()->model(new OpenAI('gpt-4o'))
+
+// 4. From string (internal)
+use Mateffy\Magic\Models\ElElEm;
+$model = ElElEm::fromString('openai/gpt-4o');
+```
+
+## Model Capabilities
+
+Check what features a model supports:
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+$model = new Mistral(Mistral::PIXTRAL_LARGE);
+
+if ($model instanceof HasMaximumImageCount) {
+    $maxImages = $model->getMaximumImageCount();
+    // Returns: 8 for Mistral models
+}
+```
+
+## Provider Comparison
+
+<CardGroup cols={2}>
+  <Card title="OpenAI" icon="brain">
+    **Strengths:** General purpose, reliable
+    
+    **Models:** GPT-4o, o1, o3-mini
+    
+    **Best for:** Production applications
+  </Card>
+  
+  <Card title="Anthropic" icon="message">
+    **Strengths:** Long context, reasoning
+    
+    **Models:** Claude 3.5 Sonnet, Opus
+    
+    **Best for:** Analysis, coding
+  </Card>
+  
+  <Card title="Google" icon="google">
+    **Strengths:** Multimodal, fast
+    
+    **Models:** Gemini 2.0 Flash, 2.5 Pro
+    
+    **Best for:** Vision, speed
+  </Card>
+  
+  <Card title="Mistral" icon="wind">
+    **Strengths:** Cost-effective, European
+    
+    **Models:** Mistral Large, Codestral
+    
+    **Best for:** Code, efficiency
+  </Card>
+</CardGroup>

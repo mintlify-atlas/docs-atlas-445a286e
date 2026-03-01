@@ -1,80 +1,181 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get started with LLM Magic in minutes with these simple examples
 ---
 
-## Get started in three steps
+# Quick Start
 
-Get your documentation site running locally and make your first customization.
+This guide will help you get up and running with LLM Magic quickly. You'll learn the basics of asking questions, chatting with LLMs, and extracting structured data.
 
-### Step 1: Set up your local environment
+## Basic Question Answering
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+The simplest way to interact with an LLM is using `Magic::ask()`:
 
-### Step 2: Deploy your changes
+```php
+use Mateffy\Magic;
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+$answer = Magic::ask('What is the capital of France?');
+// -> "The capital of France is Paris."
+```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+### Customizing Responses
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+By default, `Magic::ask()` returns full sentence responses. You can control this behavior:
 
-### Step 3: Go live
+<CodeGroup>
+```php Full Sentence (Default)
+// Returns: "The capital of France is Paris."
+$answer = Magic::ask('What is the capital of France?', sentence: true);
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```php Short Answer
+// Returns: "Paris"
+$answer = Magic::ask('What is the capital of France?', sentence: false);
+```
 
-## Next steps
+```php Custom Model
+// Use a specific model
+$answer = Magic::ask(
+    'What is the capital of France?',
+    model: 'anthropic/claude-3-5-sonnet-20241022'
+);
+```
+</CodeGroup>
 
-Now that you have your docs running, explore these key features:
+## Advanced Chat Conversations
 
-<CardGroup cols={2}>
+For more complex interactions, use `Magic::chat()` to build conversations:
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+### Simple Chat
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+```php
+use Mateffy\Magic;
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+$response = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('What is the capital of France?')
+    ->stream()
+    ->text();
+```
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+### Multi-Turn Conversations
 
-</CardGroup>
+Build conversations with multiple messages:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->temperature(0.5)
+    ->messages([
+        Step::user([
+            Step\Text::make('What is in this picture and where was it taken?'),
+            Step\Image::make('https://example.com/eiffel-tower.jpg'),
+        ]),
+        Step::assistant([
+            Step\Text::make('The picture shows the Eiffel Tower, which is located in Paris, France.'),
+        ]),
+        Step::user('How much is a flight to Paris?'),
+    ]);
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  LLM Magic supports multi-modal inputs including text and images. Different models have different capabilities, so check your chosen model's documentation.
 </Note>
+
+### Streaming Responses
+
+Stream responses in real-time for better user experience:
+
+```php
+$response = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('Write a short poem about PHP')
+    ->stream()
+    ->text();
+
+// The response will stream as it's generated
+echo $response;
+```
+
+## Function Calling with Tools
+
+LLM Magic makes it easy to give LLMs access to custom functions:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+use Mateffy\Magic\Chat\Tool;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->messages([
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->tools([
+        Tool::make('search_flight')
+            ->description('Search for flights to a given destination. Pass the departure airport code and the destination airport code in the ISO 3166-1 alpha-3 format.')
+            ->callback(fn (string $from_airport_code, string $to_airport_code) {
+                return app(FlightService::class)
+                    ->search($from_airport_code, $to_airport_code)
+                    ->toArray();
+            }),
+    ])
+    ->send();
+```
+
+<Note>
+  When you provide tools, the LLM can call them during the conversation to fetch data or perform actions. The results are automatically fed back into the conversation.
+</Note>
+
+## Structured Data Extraction
+
+Extract structured, validated JSON data from various inputs:
+
+```php
+use Mateffy\Magic;
+
+$data = Magic::extract()
+    ->schema([
+        'type' => 'object',
+        'properties' => [
+            'name' => ['type' => 'string'],
+            'age' => ['type' => 'integer'],
+        ],
+        'required' => ['name', 'age'],
+    ])
+    ->artifacts([$artifact])
+    ->send();
+```
+
+The extraction API supports:
+- PDFs
+- Word documents
+- Images
+- Spreadsheets
+- Plain text
+
+<Card title="Learn More About Extraction" icon="file-export" href="/extraction">
+  Explore advanced extraction strategies and techniques
+</Card>
+
+## Next Steps
+
+Now that you know the basics, explore more advanced features:
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Learn about all configuration options and environment variables
+  </Card>
+  <Card title="Chat API" icon="comments" href="/chat">
+    Dive deep into the chat API and all its options
+  </Card>
+  <Card title="Tools & Functions" icon="wrench" href="/tools">
+    Master function calling and custom tools
+  </Card>
+  <Card title="Data Extraction" icon="file-export" href="/extraction">
+    Learn about extraction strategies and working with documents
+  </Card>
+</CardGroup>

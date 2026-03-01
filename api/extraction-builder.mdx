@@ -1,0 +1,365 @@
+---
+title: ExtractionLLMBuilder
+description: Builder for extracting structured data from documents using various strategies
+---
+
+The `ExtractionLLMBuilder` provides a fluent interface for extracting structured data from documents using different extraction strategies. It's designed for processing large documents and extracting specific information according to a schema.
+
+## Configuration Methods
+
+### model
+
+Set the LLM model to use for extraction.
+
+```php
+$builder->model('gpt-4o')
+```
+
+<ParamField path="model" type="string|LLM" required>
+  The model identifier string (e.g., 'gpt-4o', 'claude-3-5-sonnet') or LLM instance
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### schema
+
+Set the JSON schema for the data to extract.
+
+```php
+$builder->schema([
+    'type' => 'object',
+    'properties' => [
+        'invoice_number' => ['type' => 'string'],
+        'total_amount' => ['type' => 'number'],
+        'items' => [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => ['type' => 'string'],
+                    'price' => ['type' => 'number']
+                ]
+            ]
+        ]
+    ]
+])
+```
+
+<ParamField path="schema" type="array" required>
+  JSON schema array defining the structure of data to extract
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### strategy
+
+Set the extraction strategy to use.
+
+```php
+$builder->strategy('parallel-auto-merge')
+```
+
+<ParamField path="strategy" type="string|null" required>
+  Strategy name: 'simple', 'sequential', 'sequential-auto-merge', 'parallel', 'parallel-auto-merge', 'double-pass', 'double-pass-auto-merge', or a registered custom strategy
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### instructions
+
+Set custom output instructions for the extraction.
+
+```php
+$builder->instructions('Extract all financial data with high precision')
+```
+
+<ParamField path="instructions" type="string|null" required>
+  Additional instructions to guide the extraction process
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Artifact Methods
+
+### file
+
+Add a file to extract data from.
+
+```php
+$builder->file('path/to/document.pdf')
+$builder->file('path/to/invoice.pdf', disk: 's3', replace: false)
+```
+
+<ParamField path="path" type="string" required>
+  Path to the file to process
+</ParamField>
+
+<ParamField path="disk" type="string|null" default="null">
+  Laravel disk name for file storage (null uses default disk)
+</ParamField>
+
+<ParamField path="replace" type="bool" default="false">
+  Whether to replace existing artifacts (true) or add to them (false)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### files
+
+Add multiple files to extract data from.
+
+```php
+$builder->files([
+    'path/to/document1.pdf',
+    'path/to/document2.pdf'
+])
+```
+
+<ParamField path="paths" type="string[]" required>
+  Array of file paths to process
+</ParamField>
+
+<ParamField path="replace" type="bool" default="false">
+  Whether to replace existing artifacts (true) or add to them (false)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### artifact
+
+Add a custom artifact to extract data from.
+
+```php
+$builder->artifact(new CustomArtifact($data))
+```
+
+<ParamField path="artifact" type="Artifact" required>
+  An Artifact instance to process
+</ParamField>
+
+<ParamField path="replace" type="bool" default="false">
+  Whether to replace existing artifacts (true) or add to them (false)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### artifacts
+
+Add multiple custom artifacts.
+
+```php
+$builder->artifacts([
+    new CustomArtifact($data1),
+    new CustomArtifact($data2)
+])
+```
+
+<ParamField path="artifacts" type="Artifact[]" required>
+  Array of Artifact instances to process
+</ParamField>
+
+<ParamField path="replace" type="bool" default="false">
+  Whether to replace existing artifacts (true) or add to them (false)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### getArtifacts
+
+Get the current artifacts array.
+
+```php
+$artifacts = $builder->getArtifacts()
+```
+
+<ResponseField name="return" type="Artifact[]">
+  Array of all added artifacts
+</ResponseField>
+
+## Processing Options
+
+### chunkSize
+
+Set the maximum chunk size in tokens for document splitting.
+
+```php
+$builder->chunkSize(4000)
+```
+
+<ParamField path="chunkSize" type="int|null" required>
+  Maximum tokens per chunk, or null to use the default from configuration
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### contextOptions
+
+Set context filtering and processing options.
+
+```php
+$builder->contextOptions(ContextOptions::default())
+```
+
+<ParamField path="filter" type="ContextOptions" required>
+  ContextOptions instance defining how to process document context
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Callback Methods
+
+### onMessage
+
+Set a callback for completed messages during extraction.
+
+```php
+$builder->onMessage(function(Message $message) {
+    echo "Extraction message: " . $message->content;
+})
+```
+
+<ParamField path="onMessage" type="Closure(Message): void|null" required>
+  Closure that receives each completed Message
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onMessageProgress
+
+Set a callback for streaming message progress.
+
+```php
+$builder->onMessageProgress(function(Message $message) {
+    echo $message->content;
+})
+```
+
+<ParamField path="onMessageProgress" type="Closure(Message): void|null" required>
+  Closure that receives partial Messages during streaming
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onTokenStats
+
+Set a callback for token usage statistics.
+
+```php
+$builder->onTokenStats(function(TokenStats $stats) {
+    echo "Tokens: {$stats->total}";
+})
+```
+
+<ParamField path="onTokenStats" type="Closure(TokenStats): void|null" required>
+  Closure that receives TokenStats with usage information
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onDataProgress
+
+Set a callback for extraction data progress.
+
+```php
+$builder->onDataProgress(function(array $data) {
+    echo "Extracted data: " . json_encode($data);
+})
+```
+
+<ParamField path="onDataProgress" type="Closure(array): void|null" required>
+  Closure that receives extracted data arrays as they are processed
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onActorTelemetry
+
+Set a callback for actor telemetry data.
+
+```php
+$builder->onActorTelemetry(function(ActorTelemetry $telemetry) {
+    Log::info('Actor telemetry', $telemetry->toArray());
+})
+```
+
+<ParamField path="onActorTelemetry" type="Closure(ActorTelemetry): void|null" required>
+  Closure that receives ActorTelemetry for each extraction actor
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Tool Methods
+
+### tools
+
+Register tools that the extraction model can call.
+
+```php
+$builder->tools([
+    'lookup' => fn(string $id) => database_lookup($id)
+])
+```
+
+<ParamField path="tools" type="mixed" required>
+  Array of tools (closures or InvokableTool instances) with string keys as tool names
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Execution Methods
+
+### stream
+
+Execute the extraction with streaming (processes data as it's extracted).
+
+```php
+$results = $builder->stream()
+```
+
+<ResponseField name="return" type="Collection">
+  Laravel Collection of extracted data items matching the schema
+</ResponseField>
+
+### send
+
+Execute the extraction without streaming (waits for complete results).
+
+```php
+$results = $builder->send()
+```
+
+<ResponseField name="return" type="Collection">
+  Laravel Collection of extracted data items matching the schema
+</ResponseField>

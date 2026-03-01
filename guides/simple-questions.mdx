@@ -1,0 +1,156 @@
+---
+title: 'Simple Q&A with Magic::ask()'
+description: 'Learn how to use Magic::ask() for quick question answering with LLMs'
+---
+
+## Overview
+
+The `Magic::ask()` method provides the simplest way to get answers from an LLM. It's perfect for straightforward questions that require a concise response.
+
+## Basic Usage
+
+<Steps>
+  <Step title="Ask a simple question">
+    The most basic usage returns a string answer:
+
+    ```php
+    use Mateffy\Magic;
+
+    $answer = Magic::ask('What is the capital of France?');
+    // -> "The capital of France is Paris."
+    ```
+
+    By default, `Magic::ask()` returns a full sentence response.
+  </Step>
+
+  <Step title="Get concise answers">
+    For short, direct answers without full sentences, set the `$sentence` parameter to `false`:
+
+    ```php
+    $answer = Magic::ask(
+        'What is the capital of France?',
+        sentence: false
+    );
+    // -> "Paris"
+    ```
+  </Step>
+
+  <Step title="Customize the model">
+    Specify a different model using the `$model` parameter:
+
+    ```php
+    $answer = Magic::ask(
+        'What is the capital of France?',
+        model: 'google/gemini-2.0-flash-lite'
+    );
+    ```
+  </Step>
+</Steps>
+
+## Structured Data Extraction
+
+You can also extract structured data by providing a JSON schema:
+
+```php
+use Mateffy\Magic;
+
+$data = Magic::ask(
+    'Extract the name and age from: John is 25 years old',
+    schema: [
+        'type' => 'object',
+        'properties' => [
+            'name' => ['type' => 'string'],
+            'age' => ['type' => 'integer'],
+        ],
+        'required' => ['name', 'age'],
+    ]
+);
+
+// Returns: ['name' => 'John', 'age' => 25]
+```
+
+<Note>
+  When using a custom schema, the response is automatically structured according to your schema definition.
+</Note>
+
+## Schema Type Options
+
+The `$schema` parameter accepts standard JSON Schema types:
+
+- `string` - Default, returns a text response
+- `integer` - Returns a numeric value
+- `boolean` - Returns true/false
+- `array` - Returns an array of items
+- `object` - Returns a structured object
+
+### Example: Extracting Numbers
+
+```php
+$year = Magic::ask(
+    'When was the Eiffel Tower built?',
+    schema: ['type' => 'integer'],
+    sentence: false
+);
+// -> 1889
+```
+
+### Example: Extracting Arrays
+
+```php
+$cities = Magic::ask(
+    'List the capital cities of France, Germany, and Italy',
+    schema: [
+        'type' => 'array',
+        'items' => ['type' => 'string']
+    ]
+);
+// -> ['Paris', 'Berlin', 'Rome']
+```
+
+## How It Works
+
+Under the hood, `Magic::ask()` from src/Magic.php:50:
+
+1. Creates a chat session with optimized system instructions
+2. Uses the `extract` tool to enforce the output schema
+3. Configures response style based on the `$sentence` parameter
+4. Returns the extracted value directly
+
+<Warning>
+  `Magic::ask()` is designed for single-turn questions. For multi-turn conversations, use `Magic::chat()` instead.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="When to use Magic::ask()">
+    - Quick factual questions
+    - Simple data extraction
+    - One-off LLM queries
+    - Prototyping and testing
+  </Accordion>
+
+  <Accordion title="When to use Magic::chat()">
+    - Multi-turn conversations
+    - Complex interactions requiring tools
+    - Streaming responses
+    - Custom message history
+  </Accordion>
+</AccordionGroup>
+
+## Related Methods
+
+- **Magic::function()** - For type-safe function-like LLM calls (src/Magic.php:117)
+- **Magic::chat()** - For full conversational interactions
+- **Magic::extract()** - For document extraction with custom strategies
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multimodal Chat" icon="image" href="/guides/multimodal-chat">
+    Learn to chat with images using Step\Image
+  </Card>
+  <Card title="Document Extraction" icon="file" href="/guides/document-extraction">
+    Extract structured data from documents
+  </Card>
+</CardGroup>

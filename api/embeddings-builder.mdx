@@ -1,0 +1,104 @@
+---
+title: EmbeddingsBuilder
+description: Builder for generating text embeddings using various embedding models
+---
+
+The `EmbeddingsBuilder` provides a fluent interface for generating vector embeddings from text input. Embeddings can be used for semantic search, similarity comparison, and other vector-based operations.
+
+## Configuration Methods
+
+### model
+
+Set the embedding model to use.
+
+```php
+$builder->model('text-embedding-3-small')
+$builder->model(new OpenAIEmbeddings('text-embedding-3-large'))
+```
+
+<ParamField path="model" type="string|EmbeddingModel" required>
+  The embedding model identifier string or EmbeddingModel instance
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### input
+
+Set the text input to generate embeddings for.
+
+```php
+$builder->input('The quick brown fox jumps over the lazy dog')
+$builder->input(fn() => $article->content)
+```
+
+<ParamField path="input" type="Closure|string" required>
+  The text to embed, or a closure that returns the text
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Callback Methods
+
+### onTokenStats
+
+Set a callback for token usage statistics.
+
+```php
+$builder->onTokenStats(function(TokenStats $stats) {
+    echo "Tokens used: {$stats->total}";
+})
+```
+
+<ParamField path="onTokenStats" type="Closure(TokenStats): void|null" required>
+  Closure that receives TokenStats with usage information
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Execution Methods
+
+### get
+
+Generate the embeddings for the configured input.
+
+```php
+$embedded = $builder->get()
+```
+
+<ResponseField name="return" type="EmbeddedData">
+  EmbeddedData instance containing the vector embeddings and metadata
+</ResponseField>
+
+<ResponseField name="throws" type="InvalidArgumentException">
+  Thrown if input or model is not set before calling get()
+</ResponseField>
+
+## Usage Example
+
+```php
+use Mateffy\Magic;
+
+// Simple usage with facade
+$embedded = Magic::embeddings(
+    input: 'Hello world',
+    model: new OpenAIEmbeddings('text-embedding-3-small')
+)->get();
+
+// Advanced usage with builder
+$embedded = Magic::embeddings()
+    ->model('text-embedding-3-large')
+    ->input(fn() => $document->content)
+    ->onTokenStats(function($stats) {
+        Log::info('Embedding tokens', ['total' => $stats->total]);
+    })
+    ->get();
+
+// Access the embedding vector
+$vector = $embedded->vector; // array of floats
+```

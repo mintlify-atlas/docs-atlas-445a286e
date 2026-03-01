@@ -1,0 +1,245 @@
+---
+title: Mistral Provider
+description: Use Mistral AI models including Large, Small, Pixtral, and Codestral with LLM Magic
+---
+
+# Mistral Provider
+
+The Mistral provider gives you access to Mistral AI's models, including general-purpose language models, vision models, and specialized coding models.
+
+## Configuration
+
+### API Key Setup
+
+Set your Mistral API key in your `.env` file:
+
+```bash
+MISTRAL_API_KEY=your_api_key_here
+```
+
+The API key configuration is defined in `config/llm-magic.php`:
+
+```php
+'apis' => [
+    'mistral' => [
+        'token' => env('MISTRAL_API_KEY'),
+    ],
+]
+```
+
+## Available Models
+
+LLM Magic supports the following Mistral models:
+
+### Language Models
+
+- **mistral-large-latest** - Most powerful Mistral model
+- **mistral-medium-latest** - Balanced performance
+- **mistral-small-latest** - Fast and efficient
+- **mistral-saba-latest** - Specialized Saba model
+
+### Vision Models (Pixtral)
+
+- **pixtral-large-latest** - Large vision model
+- **pixtral-12b-2409** - 12B parameter vision model
+
+### Code Models
+
+- **codestral-latest** - Specialized coding model
+
+### Compact Models (Ministral)
+
+- **ministral-3b-latest** - 3B parameter compact model
+- **ministral-8b-latest** - 8B parameter compact model
+
+### Research Models
+
+- **open-mistral-nemo** - Mistral Nemo research model
+- **open-codestral-mamba** - Codestral Mamba research model
+
+## Model Constants
+
+Use these constants for type safety:
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+Mistral::MISTRAL_LARGE          // mistral-large-latest
+Mistral::MISTRAL_MEDIUM         // mistral-medium-latest
+Mistral::MISTRAL_SMALL          // mistral-small-latest
+Mistral::MISTRAL_SABA           // mistral-saba-latest
+Mistral::PIXTRAL_LARGE          // pixtral-large-latest
+Mistral::PIXTRAL_12B            // pixtral-12b-2409
+Mistral::CODESTRAL              // codestral-latest
+Mistral::MINISTRAL_3B           // ministral-3b-latest
+Mistral::MINISTRAL_8B           // ministral-8b-latest
+Mistral::MISTRAL_NEMO           // open-mistral-nemo
+Mistral::CODESTRAL_MAMBA        // open-codestral-mamba
+```
+
+## Usage
+
+### Using the Constructor
+
+Create a Mistral model instance:
+
+```php
+use Mateffy\Magic\Models\Mistral;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$model = new Mistral(
+    model: Mistral::MISTRAL_LARGE,
+    options: new ChatGptOptions
+);
+```
+
+### Getting Available Models
+
+Retrieve a list of all available Mistral models:
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+$models = Mistral::models();
+// Returns a Collection with prefixed model names like 'mistral/mistral-large-latest'
+
+$models = Mistral::models(prefix: null, prefixLabels: null);
+// Returns models without prefix
+```
+
+The models collection includes human-readable labels:
+
+```php
+[
+    'mistral/mistral-large-latest' => 'Mistral Large',
+    'mistral/mistral-medium-latest' => 'Mistral Medium',
+    'mistral/mistral-small-latest' => 'Mistral Small',
+    'mistral/pixtral-large-latest' => 'Pixtral Large',
+    'mistral/pixtral-12b-2409' => 'Pixtral 12B',
+    'mistral/codestral-latest' => 'Codestral',
+    'mistral/ministral-3b-latest' => 'Ministral 3B',
+    'mistral/ministral-8b-latest' => 'Ministral 8B',
+    'mistral/open-mistral-nemo' => 'Mistral Nemo (Research)',
+    'mistral/open-codestral-mamba' => 'Codestral Mamba (Research)',
+    'mistral/mistral-saba-latest' => 'Mistral Saba',
+]
+```
+
+## API Configuration
+
+Mistral uses the OpenAI-compatible API with a custom base URI:
+
+```php
+protected function getOpenAiBaseUri(): ?string
+{
+    return 'https://api.mistral.ai/v1';
+}
+```
+
+## Organization Info
+
+The Mistral provider includes organization metadata:
+
+- **ID**: `mistral`
+- **Name**: Mistral
+- **Website**: https://mistral.ai
+- **Privacy**: Data may be used for model training and abuse prevention
+
+## Vision Support
+
+Pixtral models support vision capabilities with image inputs.
+
+### Image Limit
+
+Mistral models are limited to **8 images per request**:
+
+```php
+$model = new Mistral(Mistral::PIXTRAL_LARGE);
+$maxImages = $model->getMaximumImageCount(); // Returns 8
+```
+
+This limit is enforced for all Mistral models implementing the `HasMaximumImageCount` interface.
+
+## Model Selection Guide
+
+### General Language Tasks
+
+- **Mistral Large**: Most powerful, best for complex reasoning
+- **Mistral Medium**: Balanced performance and cost
+- **Mistral Small**: Fast and cost-effective for simple tasks
+
+### Vision Tasks
+
+- **Pixtral Large**: Best vision capabilities
+- **Pixtral 12B**: Faster vision processing
+
+### Code Generation
+
+- **Codestral**: Optimized for code generation and completion
+- **Codestral Mamba** (Research): Experimental coding model
+
+### Edge/On-Device
+
+- **Ministral 3B**: Smallest model for resource-constrained environments
+- **Ministral 8B**: Better performance while still compact
+
+### Research
+
+- **Mistral Nemo**: Open research model for experimentation
+- **Codestral Mamba**: Research model with Mamba architecture
+
+## Advanced Options
+
+You can pass additional options using `ChatGptOptions`:
+
+```php
+use Mateffy\Magic\Models\Mistral;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$options = new ChatGptOptions(
+    // Configure temperature, max tokens, etc.
+);
+
+$model = new Mistral(Mistral::MISTRAL_LARGE, $options);
+```
+
+## Example Usage
+
+### Text Generation
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+$model = new Mistral(Mistral::MISTRAL_LARGE);
+// Use the model for chat completions
+```
+
+### Vision with Pixtral
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+$model = new Mistral(Mistral::PIXTRAL_LARGE);
+
+// Remember: Maximum 8 images per request
+if (count($images) <= $model->getMaximumImageCount()) {
+    // Process images with the model
+}
+```
+
+### Code Generation
+
+```php
+use Mateffy\Magic\Models\Mistral;
+
+$model = new Mistral(Mistral::CODESTRAL);
+// Use for code completion and generation tasks
+```
+
+## See Also
+
+- [Configuration](/configuration/api-keys)
+- [Model Options](/api/options)
+- [Chat Completion](/guides/chat-completion)
+- [Multimodal Input](/guides/multimodal)
+- [Mistral Documentation](https://docs.mistral.ai)

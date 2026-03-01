@@ -1,0 +1,221 @@
+---
+title: Gemini Provider
+description: Use Google's Gemini models including Flash and Pro variants with LLM Magic
+---
+
+# Gemini Provider
+
+The Gemini provider gives you access to Google's Gemini models, featuring the efficient Flash series and powerful Pro models with extensive context windows.
+
+## Configuration
+
+### API Key Setup
+
+Set your Google API key in your `.env` file:
+
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+The API key configuration is defined in `config/llm-magic.php`:
+
+```php
+'apis' => [
+    'gemini' => [
+        'token' => env('GEMINI_API_KEY'),
+    ],
+    'google' => [
+        'token' => env('GEMINI_API_KEY'),
+    ],
+]
+```
+
+## Available Models
+
+LLM Magic supports the following Gemini models:
+
+### Gemini 1.5 Series
+
+- **gemini-1.5-flash** - Fast and efficient model
+- **gemini-1.5-flash-8b** - Compact 8B parameter model
+- **gemini-1.5-pro** - High-performance model with 2M token context
+
+### Gemini 2.0 Series
+
+- **gemini-2.0-flash** - Latest Flash model optimized for agents
+- **gemini-2.0-flash-lite** - Lightweight Flash variant
+
+### Gemini 2.5 Series
+
+- **gemini-2.5-flash-lite** - Compact Flash model
+- **gemini-2.5-flash** - Latest Flash model
+- **gemini-2.5-pro** - Latest Pro model
+
+### Experimental Models
+
+- **gemini-2.5-flash-preview-04-17** - Flash preview build
+- **gemini-2.5-pro-preview-03-25** - Pro preview build
+- **gemini-2.5-pro-exp-03-25** - Pro experimental build
+
+## Model Constants
+
+Use these constants for type safety:
+
+```php
+use Mateffy\Magic\Models\Gemini;
+
+Gemini::GEMINI_1_5_FLASH             // gemini-1.5-flash
+Gemini::GEMINI_1_5_FLASH_8B          // gemini-1.5-flash-8b
+Gemini::GEMINI_1_5_PRO               // gemini-1.5-pro
+Gemini::GEMINI_2_0_FLASH             // gemini-2.0-flash
+Gemini::GEMINI_2_0_FLASH_LITE        // gemini-2.0-flash-lite
+Gemini::GEMINI_2_5_FLASH_LITE        // gemini-2.5-flash-lite
+Gemini::GEMINI_2_5_FLASH             // gemini-2.5-flash
+Gemini::GEMINI_2_5_PRO               // gemini-2.5-pro
+Gemini::GEMINI_2_5_FLASH_PREVIEW     // gemini-2.5-flash-preview-04-17
+Gemini::GEMINI_2_5_PRO_PREVIEW       // gemini-2.5-pro-preview-03-25
+Gemini::GEMINI_2_5_PRO_EXPERIMENTAL  // gemini-2.5-pro-exp-03-25
+```
+
+## Usage
+
+### Using the Constructor
+
+Create a Gemini model instance:
+
+```php
+use Mateffy\Magic\Models\Gemini;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$model = new Gemini(
+    model: Gemini::GEMINI_2_0_FLASH,
+    options: new ChatGptOptions
+);
+```
+
+### Using Static Factory Methods
+
+LLM Magic provides convenient static methods:
+
+```php
+use Mateffy\Magic\Models\Gemini;
+
+// Flash models (defaults to latest version)
+$model = Gemini::flash();        // Uses flash_2
+$model = Gemini::flash_1_5();
+$model = Gemini::flash_2();
+$model = Gemini::flash_2_lite();
+$model = Gemini::flash_2_5_flash();
+
+// Pro models
+$model = Gemini::flash_2_5_pro();
+
+// Preview/Experimental
+$model = Gemini::flash_2_5_flash_preview();
+$model = Gemini::flash_2_5_pro_preview();
+$model = Gemini::flash_2_5_pro_experimental();
+```
+
+### Getting Available Models
+
+Retrieve a list of all available Gemini models:
+
+```php
+use Mateffy\Magic\Models\Gemini;
+
+$models = Gemini::models();
+// Returns a Collection with prefixed model names like 'google/gemini-2.0-flash'
+
+$models = Gemini::models(prefix: null, prefixLabels: null);
+// Returns models without prefix
+```
+
+## Model Costs
+
+Gemini models include built-in cost tracking. The following pricing is configured (per 1M tokens):
+
+| Model | Input Cost | Output Cost |
+|-------|-----------|-------------|
+| Gemini 1.5 Flash | $0.15 | $0.60 |
+| Gemini 1.5 Flash 8B | $0.075 | $0.30 |
+| Gemini 1.5 Pro | $2.50 | $10.00 |
+| Gemini 2.0 Flash | $0.10 | $0.40 |
+| Gemini 2.0 Flash Lite | $0.075 | $0.30 |
+| Gemini 2.5 Flash Preview | $0.15 | $0.60 |
+| Gemini 2.5 Pro Preview | $1.25 | $5.00 |
+| Gemini 2.5 Pro Experimental | $1.25 | $5.00 |
+
+Access cost information programmatically:
+
+```php
+$model = Gemini::flash_2();
+$cost = $model->getModelCost();
+
+if ($cost) {
+    $inputCostPerMillion = $cost->inputCentsPer1K * 1000;
+    $outputCostPerMillion = $cost->outputCentsPer1K * 1000;
+}
+```
+
+## API Configuration
+
+Gemini uses the OpenAI-compatible API with a custom base URI:
+
+```php
+protected function getOpenAiBaseUri(): ?string
+{
+    return 'generativelanguage.googleapis.com/v1beta/openai';
+}
+```
+
+## Organization Info
+
+The Gemini provider includes organization metadata:
+
+- **ID**: `google`
+- **Name**: Google
+- **Website**: https://google.com
+- **Privacy**: Data may be used for model training and abuse prevention
+
+## Features
+
+### Multimodal Support
+
+Gemini models support text, image, video, and audio inputs:
+
+- **Text**: All models
+- **Images**: All models
+- **Video**: Flash and Pro models
+- **Audio**: 2.0 Flash and newer
+
+### Large Context Windows
+
+- **Gemini 1.5 Pro**: Up to 2 million tokens
+- **Gemini 2.0 Flash**: 1 million tokens
+- **Gemini 2.5 Flash**: 1 million tokens
+
+### Context Caching
+
+Gemini 2.0 Flash and later support context caching for reduced costs on repeated queries.
+
+## Advanced Options
+
+You can pass additional options using `ChatGptOptions`:
+
+```php
+use Mateffy\Magic\Models\Gemini;
+use Mateffy\Magic\Models\Options\ChatGptOptions;
+
+$options = new ChatGptOptions(
+    // Configure temperature, max tokens, etc.
+);
+
+$model = new Gemini(Gemini::GEMINI_2_0_FLASH, $options);
+```
+
+## See Also
+
+- [Configuration](/configuration/api-keys)
+- [Model Options](/api/options)
+- [Chat Completion](/guides/chat-completion)
+- [Multimodal Input](/guides/multimodal)

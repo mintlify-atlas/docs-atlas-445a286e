@@ -1,0 +1,421 @@
+---
+title: Chat API
+description: Build conversational AI with Magic::chat() - multi-turn conversations, tool calling, and streaming responses
+---
+
+## Overview
+
+The Chat API provides a fluent interface for building conversational AI applications. Create multi-turn conversations with support for text, images, tool calling, and streaming responses.
+
+## Quick Start
+
+### Simple Chat
+
+Ask a simple question and get a response:
+
+```php
+use Mateffy\Magic;
+
+$answer = Magic::ask('What is the capital of France?');
+// -> "The capital of France is Paris."
+```
+
+### Multi-turn Conversations
+
+Build conversations with multiple messages:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->temperature(0.5)
+    ->messages([
+        Step::user([
+            Step\Text::make('What is in this picture and where was it taken?'),
+            Step\Image::make('https://example.com/eiffel-tower.jpg'),
+        ]),
+        Step::assistant([
+            Step\Text::make('The picture shows the Eiffel Tower, which is located in Paris, France.'),
+        ]),
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->stream();
+```
+
+## Configuration Methods
+
+### Model Selection
+
+Choose the AI model for your conversation:
+
+```php
+Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    // ... rest of configuration
+```
+
+### Temperature
+
+Control response randomness (0.0 = deterministic, 1.0 = creative):
+
+```php
+Magic::chat()
+    ->temperature(0.5)
+    // ... rest of configuration
+```
+
+### System Prompt
+
+Set the system instructions for the AI:
+
+```php
+Magic::chat()
+    ->system('You are a helpful assistant specialized in travel planning.')
+    ->prompt('Plan a trip to Paris')
+    ->stream();
+```
+
+### Simple Prompt
+
+For single-turn conversations, use the `prompt()` method:
+
+```php
+Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('What is the capital of France?')
+    ->stream();
+```
+
+## Messages
+
+### Message Types
+
+The `Step` class represents a single message in the conversation:
+
+#### User Messages
+
+```php
+use Mateffy\Magic\Chat\Messages\Step;
+
+// Text only
+Step::user('Tell me about Paris');
+
+// Text with image
+Step::user([
+    Step\Text::make('What is in this image?'),
+    Step\Image::make('https://example.com/photo.jpg'),
+]);
+```
+
+#### Assistant Messages
+
+```php
+Step::assistant('Paris is the capital of France.');
+
+Step::assistant([
+    Step\Text::make('Here is the information you requested.'),
+]);
+```
+
+### Adding Messages
+
+Build conversations by passing an array of messages:
+
+```php
+Magic::chat()
+    ->messages([
+        Step::user('What is the weather in Paris?'),
+        Step::assistant('Let me check that for you.'),
+        Step::user('Thanks!'),
+    ])
+    ->stream();
+```
+
+## Tool Calling
+
+<Note>
+Tools allow the AI to call PHP functions to retrieve data, perform actions, or interact with external services.
+</Note>
+
+### Defining Tools
+
+Tools can be defined as closures with automatic parameter detection:
+
+```php
+use Mateffy\Magic;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->messages([
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->tools([
+        'search_flight' => function (string $from_airport_code, string $to_airport_code) {
+            return app(FlightService::class)
+                ->search($from_airport_code, $to_airport_code)
+                ->toArray();
+        },
+    ])
+    ->stream();
+```
+
+### Tool Processing
+
+LLM Magic automatically:
+1. Detects when the AI wants to call a tool
+2. Executes the tool with the provided arguments
+3. Sends the result back to the AI
+4. Continues the conversation
+
+### Tool Choice
+
+Control when tools should be used:
+
+```php
+use Mateffy\Magic\Chat\ToolChoice;
+
+// Let the AI decide (default)
+Magic::chat()
+    ->tools([/* ... */])
+    ->toolChoice(ToolChoice::Auto)
+    ->stream();
+
+// Force a specific tool
+Magic::chat()
+    ->tools(['extract' => /* ... */])
+    ->toolChoice('extract')
+    ->stream();
+
+// Require any tool to be called
+Magic::chat()
+    ->tools([/* ... */])
+    ->forceTool(ToolChoice::Required)
+    ->stream();
+```
+
+### Error Handling
+
+Handle tool execution errors:
+
+```php
+Magic::chat()
+    ->tools([/* ... */])
+    ->onToolError(function (\Throwable $error) {
+        logger()->error('Tool execution failed', [
+            'error' => $error->getMessage(),
+        ]);
+    })
+    ->stream();
+```
+
+### Interrupting Tool Calls
+
+Intercept tool calls before execution (useful for user confirmation):
+
+```php
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+Magic::chat()
+    ->tools([/* ... */])
+    ->interrupt(function (ToolCall $call) {
+        // Return true to interrupt execution
+        if ($call->name === 'delete_data') {
+            return true; // Requires confirmation
+        }
+        return false; // Continue execution
+    })
+    ->stream();
+```
+
+## Execution Methods
+
+### stream()
+
+Stream responses in real-time for better user experience:
+
+```php
+$messages = Magic::chat()
+    ->prompt('Write a story about Paris')
+    ->stream();
+
+// Access the final text
+$text = $messages->text();
+```
+
+<Info>
+See the [Streaming documentation](/streaming) for detailed information about streaming responses.
+</Info>
+
+### send()
+
+Send the request and wait for the complete response:
+
+```php
+$messages = Magic::chat()
+    ->prompt('What is 2+2?')
+    ->send();
+```
+
+## Working with Responses
+
+The `MessageCollection` class provides helper methods to access responses:
+
+### Get Text Content
+
+```php
+$messages = Magic::chat()->prompt('Hello')->stream();
+
+// First text message
+$firstText = $messages->firstText();
+
+// Last text message
+$lastText = $messages->lastText();
+
+// All text concatenated
+$allText = $messages->text();
+```
+
+### Get Tool Results
+
+```php
+// First tool call
+$toolCall = $messages->firstToolCallMessage();
+
+// First tool result
+$result = $messages->firstToolResultMessage();
+
+// Get the output
+$output = $result->output;
+```
+
+### Filter Messages
+
+```php
+// Find specific tool results
+$flightResult = $messages->firstToolResultMessage(
+    fn($msg) => $msg->call->name === 'search_flight'
+);
+```
+
+## Advanced Features
+
+### Message Callbacks
+
+Get notified during conversation processing:
+
+```php
+Magic::chat()
+    ->prompt('Tell me a story')
+    ->onMessage(function ($message) {
+        // Called for each complete message
+        logger()->info('New message', ['type' => get_class($message)]);
+    })
+    ->onMessageProgress(function ($message) {
+        // Called during streaming for each chunk
+        echo $message->text();
+    })
+    ->stream();
+```
+
+### Token Statistics
+
+Track token usage:
+
+```php
+Magic::chat()
+    ->prompt('Explain quantum computing')
+    ->onTokenStats(function ($stats) {
+        logger()->info('Tokens used', $stats);
+    })
+    ->stream();
+```
+
+### Retry Logic
+
+Configure automatic retries for failed tool calls:
+
+```php
+Magic::chat()
+    ->tools([/* ... */])
+    ->attempts(3) // Retry up to 3 times on error
+    ->stream();
+```
+
+## Complete Example
+
+Here's a complete example combining multiple features:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+$conversation = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->temperature(0.7)
+    ->system('You are a travel assistant. Help users plan their trips.')
+    ->messages([
+        Step::user('I want to visit Paris next month'),
+    ])
+    ->tools([
+        'search_flights' => function (string $destination, string $date) {
+            return FlightAPI::search($destination, $date);
+        },
+        'get_weather' => function (string $city, string $date) {
+            return WeatherAPI::forecast($city, $date);
+        },
+        'find_hotels' => function (string $city, int $nights) {
+            return HotelAPI::search($city, $nights);
+        },
+    ])
+    ->onMessage(function ($message) {
+        logger()->info('Message received', ['message' => $message]);
+    })
+    ->onTokenStats(function ($stats) {
+        logger()->info('Token usage', $stats);
+    })
+    ->stream();
+
+echo $conversation->text();
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Streaming" icon="water">
+    Use `stream()` instead of `send()` for better user experience with long responses.
+  </Card>
+  
+  <Card title="Handle Errors" icon="shield">
+    Always implement `onToolError()` to gracefully handle tool execution failures.
+  </Card>
+  
+  <Card title="Validate Tools" icon="check">
+    Validate tool arguments before processing to ensure data integrity.
+  </Card>
+  
+  <Card title="Monitor Tokens" icon="chart-line">
+    Use `onTokenStats()` to track and optimize token usage.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="bolt" href="/streaming">
+    Learn how to implement real-time streaming responses
+  </Card>
+  
+  <Card title="Document Extraction" icon="file-pdf" href="/extraction">
+    Extract structured data from PDFs and images
+  </Card>
+  
+  <Card title="Embeddings" icon="vector-square" href="/embeddings">
+    Generate embeddings for semantic search
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/magic">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

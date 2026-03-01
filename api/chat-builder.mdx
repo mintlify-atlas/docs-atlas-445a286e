@@ -1,0 +1,350 @@
+---
+title: ChatPreconfiguredModelBuilder
+description: Builder for configuring and executing chat operations with LLMs
+---
+
+The `ChatPreconfiguredModelBuilder` provides a fluent interface for building and executing chat conversations with language models. It supports messages, tools, streaming, and various callbacks.
+
+## Configuration Methods
+
+### model
+
+Set the LLM model to use for the chat.
+
+```php
+$builder->model('gpt-4o')
+```
+
+<ParamField path="model" type="string|LLM" required>
+  The model identifier string (e.g., 'gpt-4o', 'claude-3-5-sonnet') or LLM instance
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### system
+
+Set the system prompt for the conversation.
+
+```php
+$builder->system('You are a helpful assistant')
+```
+
+<ParamField path="prompt" type="string|null" required>
+  The system prompt to guide the model's behavior
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### prompt
+
+Set a simple user prompt (alternative to using messages).
+
+```php
+$builder->prompt('What is the capital of France?')
+```
+
+<ParamField path="prompt" type="Prompt|string|null" required>
+  The user prompt text or Prompt instance
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### messages
+
+Set the conversation messages.
+
+```php
+$builder->messages([
+    TextMessage::user('Hello'),
+    TextMessage::assistant('Hi there!')
+])
+```
+
+<ParamField path="messages" type="Message[]" required>
+  Array of Message instances (TextMessage, ToolCallMessage, ToolResultMessage)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### addMessage
+
+Add a single message to the conversation.
+
+```php
+$builder->addMessage(TextMessage::user('Follow-up question'))
+```
+
+<ParamField path="message" type="Message" required>
+  The message to add
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### addMessages
+
+Add multiple messages to the conversation.
+
+```php
+$builder->addMessages([
+    TextMessage::user('Question 1'),
+    TextMessage::user('Question 2')
+])
+```
+
+<ParamField path="messages" type="Message[]" required>
+  Array of messages to add
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Tool Methods
+
+### tools
+
+Register tools that the model can call.
+
+```php
+$builder->tools([
+    'search' => fn(string $query) => searchDatabase($query),
+    'calculate' => new CalculatorTool()
+])
+```
+
+<ParamField path="tools" type="mixed" required>
+  Array of tools (closures or InvokableTool instances) with string keys as tool names
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### toolChoice
+
+Set the tool choice strategy.
+
+```php
+$builder->toolChoice('search') // Force specific tool
+$builder->toolChoice(ToolChoice::Auto) // Let model choose
+```
+
+<ParamField path="name" type="ToolChoice|string" default="ToolChoice::Auto">
+  Tool choice mode: ToolChoice::Auto, ToolChoice::Required, or a specific tool name
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### forceTool
+
+Force the model to use a tool.
+
+```php
+$builder->forceTool('search')
+```
+
+<ParamField path="name" type="ToolChoice|string" default="ToolChoice::Required">
+  The tool name to force, or ToolChoice::Required to require any tool
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### interrupt
+
+Set a callback to interrupt execution before tool calls.
+
+```php
+$builder->interrupt(function(ToolCall $call) {
+    return $call->name === 'dangerous_operation';
+})
+```
+
+<ParamField path="shouldInterrupt" type="Closure|null" required>
+  Closure that receives a ToolCall and returns bool. True interrupts execution.
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onToolError
+
+Set a callback for tool execution errors.
+
+```php
+$builder->onToolError(function(Throwable $e) {
+    Log::error('Tool error: ' . $e->getMessage());
+})
+```
+
+<ParamField path="onToolError" type="Closure|null" required>
+  Closure that receives the Throwable exception
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Callback Methods
+
+### onMessage
+
+Set a callback for completed messages.
+
+```php
+$builder->onMessage(function(Message $message) {
+    echo "Received: " . $message->content;
+})
+```
+
+<ParamField path="onMessage" type="Closure(Message): void|null" required>
+  Closure that receives each completed Message
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onMessageProgress
+
+Set a callback for streaming message progress.
+
+```php
+$builder->onMessageProgress(function(Message $message) {
+    echo $message->content;
+})
+```
+
+<ParamField path="onMessageProgress" type="Closure(Message): void|null" required>
+  Closure that receives partial Messages during streaming
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### onTokenStats
+
+Set a callback for token usage statistics.
+
+```php
+$builder->onTokenStats(function(TokenStats $stats) {
+    echo "Tokens used: {$stats->total}";
+})
+```
+
+<ParamField path="onTokenStats" type="Closure(TokenStats): void|null" required>
+  Closure that receives TokenStats with usage information
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Configuration Methods
+
+### attempts
+
+Set the maximum number of retry attempts for tool errors.
+
+```php
+$builder->attempts(5)
+```
+
+<ParamField path="attempts" type="int" required>
+  Maximum number of attempts (default: 3)
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### debugger
+
+Attach a debugger for logging conversation details.
+
+```php
+$builder->debugger(new FileDebugger('chat.log'))
+```
+
+<ParamField path="debugger" type="FileDebugger|null" required>
+  FileDebugger instance or null to disable debugging
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+### schema
+
+Set a JSON schema for structured output validation.
+
+```php
+$builder->schema([
+    'type' => 'object',
+    'properties' => [
+        'name' => ['type' => 'string'],
+        'age' => ['type' => 'number']
+    ]
+])
+```
+
+<ParamField path="schema" type="array" required>
+  JSON schema array defining the expected output structure
+</ParamField>
+
+<ResponseField name="return" type="static">
+  Returns the builder instance for method chaining
+</ResponseField>
+
+## Execution Methods
+
+### stream
+
+Execute the chat with streaming responses.
+
+```php
+$messages = $builder->stream()
+```
+
+<ResponseField name="return" type="MessageCollection">
+  Collection of messages from the conversation, including responses and tool calls
+</ResponseField>
+
+### send
+
+Execute the chat without streaming (waits for complete response).
+
+```php
+$messages = $builder->send()
+```
+
+<ResponseField name="return" type="MessageCollection">
+  Collection of messages from the conversation
+</ResponseField>
+
+### build
+
+Build a Prompt object from the current configuration.
+
+```php
+$prompt = $builder->build()
+```
+
+<ResponseField name="return" type="Prompt">
+  A Prompt object containing the system message, messages, tools, and configuration
+</ResponseField>

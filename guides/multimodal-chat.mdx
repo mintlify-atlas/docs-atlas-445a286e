@@ -1,0 +1,254 @@
+---
+title: 'Multimodal Chat with Images'
+description: 'Learn how to build conversations that include images using Step and Step\\Image'
+---
+
+## Overview
+
+LLM Magic supports multimodal conversations, allowing you to chat with both text and images. This is powered by the `Step` message class and its content types like `Step\Image` and `Step\Text`.
+
+## Basic Image Chat
+
+<Steps>
+  <Step title="Create a user message with an image">
+    Use `Step::user()` with an array of content parts:
+
+    ```php
+    use Mateffy\Magic;
+    use Mateffy\Magic\Chat\Messages\Step;
+
+    $messages = Magic::chat()
+        ->model('google/gemini-2.0-flash-lite')
+        ->messages([
+            Step::user([
+                Step\Text::make('What is in this picture and where was it taken?'),
+                Step\Image::url('https://example.com/eiffel-tower.jpg'),
+            ]),
+        ])
+        ->send();
+    ```
+  </Step>
+
+  <Step title="Get the response">
+    The LLM will analyze the image and respond:
+
+    ```php
+    $response = $messages->text();
+    // -> "The picture shows the Eiffel Tower, which is located in Paris, France."
+    ```
+  </Step>
+</Steps>
+
+## Loading Images
+
+The `Step\Image` class provides multiple static methods for loading images from different sources:
+
+### From URL
+
+```php
+use Mateffy\Magic\Chat\Messages\Step;
+
+Step\Image::url('https://example.com/photo.jpg')
+```
+
+### From File Path
+
+```php
+Step\Image::path('/path/to/image.jpg')
+```
+
+The MIME type is automatically detected from the file.
+
+### From Raw Contents
+
+```php
+$contents = file_get_contents('/path/to/image.jpg');
+Step\Image::raw($contents, 'image/jpeg')
+```
+
+### From Laravel Storage Disk
+
+```php
+Step\Image::disk('public', 'uploads/photo.jpg')
+```
+
+### From Base64
+
+```php
+$base64Data = base64_encode($imageContents);
+Step\Image::base64($base64Data, 'image/png')
+```
+
+<Note>
+  All image loading methods automatically handle base64 encoding internally. The image is sent to the LLM as base64 data.
+</Note>
+
+## Multi-Turn Conversations
+
+You can build complex conversations mixing text and images:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->temperature(0.5)
+    ->messages([
+        Step::user([
+            Step\Text::make('What is in this picture and where was it taken?'),
+            Step\Image::url('https://example.com/eiffel-tower.jpg'),
+        ]),
+        Step::assistant([
+            Step\Text::make('The picture shows the Eiffel Tower, which is located in Paris, France.'),
+        ]),
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->send();
+```
+
+<Note>
+  You can mix text-only and multimodal messages in the same conversation. The `Step::user()` and `Step::assistant()` methods accept either a string or an array of content parts.
+</Note>
+
+## Step Message Structure
+
+From src/Magic/Chat/Messages/Step.php, the `Step` class represents a structured message with:
+
+- **role** - User, Assistant, or System
+- **content** - Array of content parts (Text, Image, etc.)
+
+### Text-Only Messages
+
+For convenience, you can pass a string directly:
+
+```php
+Step::user('Just a text message')
+```
+
+This is equivalent to:
+
+```php
+Step::user([
+    Step\Text::make('Just a text message'),
+])
+```
+
+### Multimodal Messages
+
+Pass an array of content parts:
+
+```php
+Step::user([
+    Step\Text::make('Compare these two images:'),
+    Step\Image::path('/path/to/image1.jpg'),
+    Step\Image::path('/path/to/image2.jpg'),
+])
+```
+
+## Content Types
+
+From src/Magic/Chat/Messages/Step/, the following content types are available:
+
+### Step\Text
+
+Represents text content:
+
+```php
+Step\Text::make('Your text here')
+```
+
+### Step\Image
+
+Represents image content with these properties from src/Magic/Chat/Messages/Step/Image.php:
+
+- **imageBase64** - Base64-encoded image data
+- **mime** - MIME type (e.g., 'image/jpeg', 'image/png')
+
+## Combining with Tools
+
+You can use images in conversations that also use tools:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Chat\Messages\Step;
+use Mateffy\Magic\Chat\Tool;
+
+$messages = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->messages([
+        Step::user([
+            Step\Text::make('What is in this picture and where was it taken?'),
+            Step\Image::url('https://example.com/eiffel-tower.jpg'),
+        ]),
+        Step::assistant('The picture shows the Eiffel Tower in Paris, France.'),
+        Step::user('How much is a flight to Paris?'),
+    ])
+    ->tools([
+        // Tool definition (see Custom Tools guide)
+    ])
+    ->send();
+```
+
+## Supported Models
+
+Not all LLM models support vision. Multimodal-capable models include:
+
+- Google Gemini 2.0 Flash
+- Anthropic Claude 3.5 Sonnet
+- OpenAI GPT-4 Vision
+- OpenAI GPT-4o
+
+<Warning>
+  Always check the model's capabilities before sending images. Text-only models will return an error if you include images.
+</Warning>
+
+## Streaming with Images
+
+You can stream responses to multimodal conversations:
+
+```php
+$response = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->messages([
+        Step::user([
+            Step\Text::make('Describe this image in detail'),
+            Step\Image::path('/path/to/photo.jpg'),
+        ]),
+    ])
+    ->stream()
+    ->text();
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Image Size and Format">
+    - Use JPEG or PNG formats for best compatibility
+    - Optimize large images before sending
+    - Most models have file size limits (typically 20MB)
+  </Accordion>
+
+  <Accordion title="Context Management">
+    - Images consume significant context tokens
+    - Limit the number of images in a single conversation
+    - Consider the model's context window
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    - Always validate image paths/URLs exist
+    - Handle MIME type detection failures
+    - Check model capabilities before sending
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Tools" icon="wrench" href="/guides/custom-tools">
+    Build custom tools to extend chat capabilities
+  </Card>
+  <Card title="Document Extraction" icon="file" href="/guides/document-extraction">
+    Extract data from PDF and image documents
+  </Card>
+</CardGroup>

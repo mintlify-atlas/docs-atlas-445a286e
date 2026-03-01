@@ -1,0 +1,277 @@
+---
+title: Configuration
+description: Configure LLM Magic models, API keys, and advanced settings
+---
+
+# Configuration
+
+LLM Magic can be configured through environment variables and the `config/llm-magic.php` configuration file.
+
+## Environment Variables
+
+Add these variables to your `.env` file to configure LLM Magic:
+
+### API Keys
+
+Configure API keys for the LLM providers you want to use:
+
+```bash
+# OpenAI (default provider)
+OPENAI_API_KEY=sk-...
+OPENAI_ORGANIZATION_ID=org-...  # Optional
+
+# Anthropic (Claude)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Google Gemini
+GEMINI_API_KEY=...
+
+# Mistral AI
+MISTRAL_API_KEY=...
+
+# OpenRouter (access to multiple models)
+OPENROUTER_API_KEY=...
+
+# Together AI
+TOGETHERAI_API_KEY=...
+
+# DeepSeek
+DEEPSEEK_API_KEY=...
+
+# Groq
+GROQ_API_KEY=...
+```
+
+<Note>
+  You only need to configure API keys for the providers you plan to use. LLM Magic will throw an error if you try to use a provider without its API key configured.
+</Note>
+
+### Model Configuration
+
+Set default models for different use cases:
+
+```bash
+# Default model for all operations
+LLM_MAGIC_MODEL=openai/gpt-4o-mini
+
+# Model for cost-sensitive operations
+LLM_MAGIC_CHEAP_MODEL=openai/gpt-4o-mini
+
+# Model specifically for data extraction
+LLM_MAGIC_EXTRACTION_MODEL=anthropic/claude-3-5-sonnet-20241022
+
+# Model for chat operations
+LLM_MAGIC_CHAT_MODEL=google/gemini-2.0-flash-lite
+
+# Model for generating embeddings
+LLM_MAGIC_EMBEDDINGS_MODEL=openai/text-embedding-3-small
+```
+
+### Extraction Settings
+
+Configure parallel extraction behavior:
+
+```bash
+# Number of concurrent extraction operations (default: 3)
+LLM_MAGIC_EXTRACTION_CONCURRENCY=3
+
+# Default maximum tokens per model (default: 10000)
+LLM_MAGIC_DEFAULT_MAX_TOKENS=10000
+```
+
+### Artifact Storage
+
+Configure where processed artifacts (PDFs, images, etc.) are stored:
+
+```bash
+# Base path for artifacts (default: storage/app/magic-artifacts)
+LLM_MAGIC_ARTIFACTS_BASE=/path/to/artifacts
+
+# Laravel disk for artifacts (default: artifacts)
+LLM_MAGIC_ARTIFACTS_DISK=artifacts
+
+# Prefix for artifact paths (default: empty)
+LLM_MAGIC_ARTIFACTS_PREFIX=llm-magic/
+```
+
+### Python Integration
+
+LLM Magic uses Python for some operations (like PDF processing):
+
+```bash
+# Python working directory
+LLM_MAGIC_PYTHON_CWD=/path/to/python
+
+# Use UV for Python package management (default: true)
+LLM_MAGIC_PYTHON_USE_UV=true
+
+# Path to UV executable (default: /usr/bin/env uv)
+LLM_MAGIC_PYTHON_UV_PATH=/usr/local/bin/uv
+
+# Path to Python binary (default: auto-detected)
+LLM_MAGIC_PYTHON_BIN_PATH=/path/to/python
+```
+
+## Configuration File
+
+The `config/llm-magic.php` file provides full control over LLM Magic's behavior. Here's the complete configuration structure:
+
+<CodeGroup>
+```php Models
+<?php
+
+return [
+    'llm' => [
+        'default' => env('LLM_MAGIC_MODEL', 'openai/gpt-4o-mini'),
+    ],
+    'models' => [
+        'default' => env('LLM_MAGIC_MODEL', 'openai/gpt-4o-mini'),
+        'cheap' => env('LLM_MAGIC_CHEAP_MODEL', 'openai/gpt-4o-mini'),
+        'extraction' => env('LLM_MAGIC_EXTRACTION_MODEL', null),
+        'chat' => env('LLM_MAGIC_CHAT_MODEL', null),
+        'embeddings' => env('LLM_MAGIC_EMBEDDINGS_MODEL', 'openai/text-embedding-3-small'),
+    ],
+];
+```
+
+```php API Configuration
+<?php
+
+return [
+    'apis' => [
+        'anthropic' => [
+            'token' => env('ANTHROPIC_API_KEY'),
+        ],
+        'openai' => [
+            'token' => env('OPENAI_API_KEY'),
+            'organization_id' => env('OPENAI_ORGANIZATION_ID'),
+        ],
+        'groq' => [
+            'token' => env('GROQ_API_KEY'),
+        ],
+        'openrouter' => [
+            'token' => env('OPENROUTER_API_KEY'),
+        ],
+        'mistral' => [
+            'token' => env('MISTRAL_API_KEY'),
+        ],
+        'togetherai' => [
+            'token' => env('TOGETHERAI_API_KEY'),
+        ],
+        'gemini' => [
+            'token' => env('GEMINI_API_KEY'),
+        ],
+        'google' => [
+            'token' => env('GEMINI_API_KEY'),
+        ],
+        'deepseek' => [
+            'token' => env('DEEPSEEK_API_KEY'),
+        ],
+    ],
+];
+```
+
+```php Extraction Settings
+<?php
+
+return [
+    'extraction' => [
+        'concurrency' => intval(env('LLM_MAGIC_EXTRACTION_CONCURRENCY', 3)),
+    ],
+    'artifacts' => [
+        'base' => env('LLM_MAGIC_ARTIFACTS_BASE', storage_path('app/magic-artifacts')),
+        'disk' => env('LLM_MAGIC_ARTIFACTS_DISK', 'artifacts'),
+        'prefix' => env('LLM_MAGIC_ARTIFACTS_PREFIX', ''),
+        'default_max_tokens' => env('LLM_MAGIC_DEFAULT_MAX_TOKENS', 10000),
+    ],
+];
+```
+
+```php Python Integration
+<?php
+
+return [
+    'python' => [
+        'cwd' => env('LLM_MAGIC_PYTHON_CWD', realpath(__DIR__ . '/../python')),
+        'use_uv' => env('LLM_MAGIC_PYTHON_USE_UV', true),
+        'uv' => [
+            'path' => env('LLM_MAGIC_PYTHON_UV_PATH', '/usr/bin/env uv'),
+        ],
+        'bin' => [
+            'path' => env('LLM_MAGIC_PYTHON_BIN_PATH', realpath(__DIR__ . '/../python/.venv/bin/python')),
+        ],
+    ],
+];
+```
+</CodeGroup>
+
+## Model Selection
+
+LLM Magic supports multiple model providers and formats:
+
+### Available Providers
+
+- **OpenAI**: `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-4-turbo`
+- **Anthropic**: `anthropic/claude-3-5-sonnet-20241022`, `anthropic/claude-3-opus`
+- **Google**: `google/gemini-2.0-flash-lite`, `google/gemini-pro`
+- **Mistral**: `mistral/mistral-large`, `mistral/mistral-small`
+- **OpenRouter**: Access to 100+ models via `openrouter/provider/model-name`
+- **Together AI**: `togetherai/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo`
+- **DeepSeek**: `deepseek/deepseek-chat`
+
+### Accessing Available Models
+
+Get a list of all available models programmatically:
+
+```php
+use Mateffy\Magic;
+
+// Get all registered models
+$models = Magic::models();
+
+// Get the default model name
+$defaultName = Magic::defaultModelName();
+
+// Get the default model label
+$defaultLabel = Magic::defaultModelLabel();
+
+// Get the default model instance
+$model = Magic::defaultModel();
+```
+
+## Custom Extraction Strategies
+
+Register custom extraction strategies for specialized use cases:
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Extraction\Strategies\Strategy;
+
+Magic::registerStrategy('my-custom-strategy', MyCustomStrategy::class);
+```
+
+Built-in strategies include:
+- `simple`: Single-pass extraction
+- `sequential`: Process artifacts sequentially
+- `sequential-auto-merge`: Sequential with automatic merging
+- `parallel`: Process artifacts in parallel
+- `parallel-auto-merge`: Parallel with automatic merging
+- `double-pass`: Two-pass extraction for better accuracy
+- `double-pass-auto-merge`: Double-pass with automatic merging
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API Reference" icon="comments" href="/api/chat-builder">
+    Learn about all chat configuration options
+  </Card>
+  <Card title="Extraction Strategies" icon="file-export" href="/strategies">
+    Choose the right extraction strategy for your use case
+  </Card>
+  <Card title="Model Providers" icon="server" href="/models">
+    Explore all supported LLM providers
+  </Card>
+  <Card title="Advanced Usage" icon="rocket" href="/tools">
+    Learn advanced patterns and techniques
+  </Card>
+</CardGroup>

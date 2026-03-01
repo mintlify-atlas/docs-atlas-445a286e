@@ -1,0 +1,391 @@
+---
+title: "EloquentTools"
+description: "Auto-generated CRUD tools for Eloquent models"
+---
+
+## Overview
+
+EloquentTools automatically generates CRUD (Create, Read, Update, Delete, Query) tools for your Eloquent models, allowing LLMs to interact with your database through natural language.
+
+## Quick Start
+
+```php
+use Mateffy\Magic;
+use Mateffy\Magic\Tools\Prebuilt\EloquentTools;
+use App\Models\Product;
+
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Show me all products under $50')
+    ->ask();
+```
+
+## EloquentTools::crud()
+
+Generates a complete set of CRUD tools for a given Eloquent model.
+
+```php
+EloquentTools::crud(
+    model: Product::class,
+    query: true,
+    get: true,
+    create: true,
+    update: true,
+    delete: true,
+    with: ['category', 'tags']
+);
+```
+
+### Parameters
+
+<ParamField path="model" type="class-string<Model>" required>
+  The fully qualified class name of the Eloquent model
+</ParamField>
+
+<ParamField path="query" type="bool" default="true">
+  Include the query tool for searching and filtering records
+</ParamField>
+
+<ParamField path="get" type="bool" default="true">
+  Include the get tool for retrieving a single record by ID
+</ParamField>
+
+<ParamField path="create" type="bool" default="true">
+  Include the create tool for creating new records
+</ParamField>
+
+<ParamField path="update" type="bool" default="true">
+  Include the update tool for updating existing records
+</ParamField>
+
+<ParamField path="delete" type="bool" default="true">
+  Include the delete tool for deleting records
+</ParamField>
+
+<ParamField path="with" type="array" default="[]">
+  Array of relationships to eager load with queries
+</ParamField>
+
+### Returns
+
+Returns an array of tool instances that can be passed to the `tools()` method.
+
+## Model Setup
+
+Your Eloquent model must implement the `HasMagic` interface and provide a schema:
+
+```php
+use Illuminate\Database\Eloquent\Model;
+use Mateffy\Magic\Support\HasMagic;
+
+class Product extends Model implements HasMagic
+{
+    protected $fillable = ['name', 'price', 'description', 'category_id'];
+
+    public function getMagicSchema(bool $creating = true): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'name' => [
+                    'type' => 'string',
+                    'description' => 'Product name',
+                ],
+                'price' => [
+                    'type' => 'number',
+                    'description' => 'Product price in USD',
+                    'minimum' => 0,
+                ],
+                'description' => [
+                    'type' => 'string',
+                    'description' => 'Product description',
+                ],
+                'category_id' => [
+                    'type' => 'integer',
+                    'description' => 'Category ID',
+                ],
+            ],
+            'required' => $creating ? ['name', 'price', 'category_id'] : [],
+        ];
+    }
+}
+```
+
+### HasMagic Interface
+
+<ParamField path="getMagicSchema" type="array" required>
+  Returns the JSON schema for the model.
+  
+  **Parameters:**
+  - `$creating` (bool) - Whether the schema is for creating (true) or updating (false) records
+  
+  **Returns:**
+  - An object schema with `type`, `properties`, and optionally `required` fields
+</ParamField>
+
+## Generated Tools
+
+### Query Tool
+
+Searches and filters model records.
+
+**Tool Name:** `query_{model_plural}` (e.g., `query_products`)
+
+**Parameters:**
+
+<ParamField path="filters" type="array" optional>
+  Array of filter objects to apply
+  
+  Each filter has:
+  - `field` (string) - The field to filter by
+  - `value` (string|array) - The value to filter by
+  - `operator` (string) - Comparison operator: `=`, `!=`, `<`, `<=`, `>`, `>=`, `like`
+</ParamField>
+
+<ParamField path="order_by" type="string" default="updated_at">
+  Column to order results by
+</ParamField>
+
+<ParamField path="order_direction" type="string" default="asc">
+  Sort direction: `asc` or `desc`
+</ParamField>
+
+<ParamField path="limit" type="integer" default="10">
+  Maximum number of records to return (1-100)
+</ParamField>
+
+<ParamField path="offset" type="integer" default="0">
+  Number of records to skip
+</ParamField>
+
+**Example:**
+
+```php
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Find products with price less than 50, ordered by name')
+    ->ask();
+```
+
+### Get Tool
+
+Retrieves a single record by ID.
+
+**Tool Name:** `get_{model_plural}` (e.g., `get_products`)
+
+**Parameters:**
+
+<ParamField path="id" type="integer|string" required>
+  The ID of the record to retrieve. Type depends on your model's key type (supports integer, string, and UUID)
+</ParamField>
+
+**Returns:**
+
+The model instance or an error if not found.
+
+**Example:**
+
+```php
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Show me product #123')
+    ->ask();
+```
+
+### Create Tool
+
+Creates a new record.
+
+**Tool Name:** `create_{model_plural}` (e.g., `create_products`)
+
+**Parameters:**
+
+<ParamField path="data" type="object" required>
+  Object containing the model data according to the schema defined in `getMagicSchema(creating: true)`
+</ParamField>
+
+**Returns:**
+
+The newly created model instance.
+
+**Example:**
+
+```php
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Create a new product called "Super Widget" priced at $29.99')
+    ->ask();
+```
+
+### Update Tool
+
+Updates an existing record.
+
+**Tool Name:** `update_{model_plural}` (e.g., `update_products`)
+
+**Parameters:**
+
+<ParamField path="id" type="integer|string" required>
+  The ID of the record to update
+</ParamField>
+
+<ParamField path="data" type="object" required>
+  Object containing the fields to update according to the schema defined in `getMagicSchema(creating: false)`
+</ParamField>
+
+**Returns:**
+
+The updated model instance or an error if not found.
+
+**Example:**
+
+```php
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Update product #123 to set the price to $39.99')
+    ->ask();
+```
+
+### Delete Tool
+
+Deletes a record permanently.
+
+**Tool Name:** `delete_{model_plural}` (e.g., `delete_products`)
+
+**Parameters:**
+
+<ParamField path="id" type="integer|string" required>
+  The ID of the record to delete
+</ParamField>
+
+**Returns:**
+
+A success message or an error if not found.
+
+**Example:**
+
+```php
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Delete product #456')
+    ->ask();
+```
+
+## Selective Tools
+
+You can choose which tools to generate:
+
+```php
+// Read-only access
+EloquentTools::crud(
+    model: Product::class,
+    create: false,
+    update: false,
+    delete: false
+);
+
+// Only query and get
+EloquentTools::crud(
+    model: Product::class,
+    query: true,
+    get: true,
+    create: false,
+    update: false,
+    delete: false
+);
+```
+
+## Eager Loading Relationships
+
+Eager load relationships to avoid N+1 queries:
+
+```php
+EloquentTools::crud(
+    model: Product::class,
+    with: ['category', 'tags', 'reviews']
+);
+```
+
+This will automatically eager load the specified relationships when querying or getting records.
+
+## Multiple Models
+
+You can create tools for multiple models:
+
+```php
+use App\Models\{Product, Category, Order};
+
+Magic::chat()
+    ->tools(
+        EloquentTools::crud(Product::class),
+        EloquentTools::crud(Category::class),
+        EloquentTools::crud(Order::class, delete: false),
+    )
+    ->prompt('Show me all orders for products in the Electronics category')
+    ->ask();
+```
+
+## Error Handling
+
+Eloquent tools handle common errors:
+
+- **Record not found**: Returns a Magic error with code `not_found`
+- **Invalid arguments**: Throws `InvalidArgumentException`
+- **Validation errors**: Returns Laravel validation errors
+
+```php
+use Mateffy\Magic;
+
+$result = Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->prompt('Get product #999999')
+    ->ask();
+
+// Check for errors
+if (Magic::isError($result)) {
+    // Handle error
+}
+```
+
+## Custom Tool Names
+
+You can customize tool names by extending the EloquentTool classes:
+
+```php
+use Mateffy\Magic\Tools\Prebuilt\Eloquent\QueryTool;
+
+$queryTool = new QueryTool(
+    model_classpath: Product::class,
+    with: ['category'],
+    tool_name: 'search_products'
+);
+
+Magic::chat()
+    ->tools($queryTool)
+    ->prompt('Search for products')
+    ->ask();
+```
+
+## Security Considerations
+
+<Warning>
+  EloquentTools provide direct database access. Always:
+  - Use validation in your models
+  - Implement proper authorization checks
+  - Be cautious with the delete tool in production
+  - Consider using policies and gates
+  - Limit which fields can be filled using `$fillable` on your models
+</Warning>
+
+```php
+// Add authorization
+Magic::chat()
+    ->tools(EloquentTools::crud(Product::class))
+    ->onToolError(function (Throwable $e) {
+        if ($e instanceof AuthorizationException) {
+            return Magic::error('Not authorized', 'unauthorized');
+        }
+        throw $e;
+    })
+    ->ask();
+```

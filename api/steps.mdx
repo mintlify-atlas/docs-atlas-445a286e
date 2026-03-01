@@ -1,0 +1,512 @@
+---
+title: Steps
+description: Step class and content types for multi-modal messages with text, images, and tool interactions
+---
+
+The `Step` class represents multi-modal messages that can contain multiple types of content including text, images, tool uses, and tool results. This is useful for complex interactions that combine different content types in a single message.
+
+## Step
+
+A message containing an array of content items (text, images, tool uses, tool results).
+
+**Location:** `src/Magic/Chat/Messages/Step.php:10`
+
+### Constructor
+
+<ParamField path="role" type="Role" required>
+  The role of the message sender (User, Assistant, or System)
+</ParamField>
+
+<ParamField path="content" type="array<ContentInterface>" required>
+  Array of content items (Text, Image, ToolUse, or ToolResult instances)
+</ParamField>
+
+### Static Methods
+
+#### user()
+
+Create a user step message with content.
+
+```php
+// With string content
+Step::user('What is in this image?')
+
+// With content array
+Step::user([
+    new Text('Analyze this image:'),
+    Image::path('/path/to/image.jpg')
+])
+```
+
+<ParamField path="content" type="string|array<ContentInterface>" required>
+  Either a string (converted to Text) or array of ContentInterface items
+</ParamField>
+
+#### assistant()
+
+Create an assistant step message.
+
+```php
+// With string content
+Step::assistant('I can see a cat in the image.')
+
+// With content array
+Step::assistant([
+    new Text('Here is the analysis:'),
+    ToolUse::make('analyze_image', ['url' => 'image.jpg'])
+])
+```
+
+<ParamField path="content" type="string|array<ContentInterface>" required>
+  Either a string (converted to Text) or array of ContentInterface items
+</ParamField>
+
+#### base64Image()
+
+Create a user step with a base64-encoded image.
+
+```php
+Step::base64Image($base64Data, 'image/jpeg')
+```
+
+<ParamField path="base64Image" type="string" required>
+  The base64-encoded image data
+</ParamField>
+
+<ParamField path="mime" type="string" required>
+  The MIME type of the image (e.g., 'image/jpeg', 'image/png')
+</ParamField>
+
+#### base64()
+
+Alias for `base64Image()`. Create a user step with a base64-encoded image.
+
+```php
+Step::base64($base64Data, 'image/png')
+```
+
+<ParamField path="base64Image" type="string" required>
+  The base64-encoded image data
+</ParamField>
+
+<ParamField path="mime" type="string" required>
+  The MIME type of the image
+</ParamField>
+
+### Instance Methods
+
+#### toArray()
+
+Convert the step to an array representation.
+
+```php
+$array = $step->toArray();
+// ['role' => 'user', 'content' => [...]]
+```
+
+#### fromArray()
+
+Create a Step instance from an array.
+
+```php
+$step = Step::fromArray([
+    'role' => 'user',
+    'content' => [
+        ['type' => 'text', 'text' => 'Hello'],
+        ['type' => 'image', 'source' => [...]]
+    ]
+])
+```
+
+<ParamField path="data" type="array" required>
+  Array containing role and content data
+</ParamField>
+
+## Content Types
+
+Content types implement the `ContentInterface` and represent different kinds of content within a Step message.
+
+**Interface Location:** `src/Magic/Chat/Messages/Step/ContentInterface.php:8`
+
+### Text
+
+Text content within a step message.
+
+**Location:** `src/Magic/Chat/Messages/Step/Text.php:7`
+
+#### Constructor
+
+<ParamField path="text" type="string" required>
+  The text content
+</ParamField>
+
+#### Static Methods
+
+##### make()
+
+Create a Text content instance.
+
+```php
+Text::make('This is some text content')
+```
+
+<ParamField path="text" type="string" required>
+  The text content
+</ParamField>
+
+##### fromArray()
+
+Create from an array representation.
+
+```php
+Text::fromArray(['text' => 'Hello world'])
+```
+
+<ParamField path="data" type="array" required>
+  Array with 'text' key
+</ParamField>
+
+#### Usage Example
+
+```php
+$step = Step::user([
+    Text::make('Please analyze this:'),
+    Text::make('Focus on the details.')
+])
+```
+
+### Image
+
+Image content within a step message. Supports multiple input sources.
+
+**Location:** `src/Magic/Chat/Messages/Step/Image.php:8`
+
+#### Constructor
+
+<ParamField path="imageBase64" type="string" required>
+  The base64-encoded image data
+</ParamField>
+
+<ParamField path="mime" type="string" required>
+  The MIME type of the image (e.g., 'image/jpeg', 'image/png', 'image/webp')
+</ParamField>
+
+#### Static Methods
+
+##### path()
+
+Create an Image from a file path.
+
+```php
+Image::path('/path/to/photo.jpg')
+```
+
+<ParamField path="path" type="string" required>
+  The file system path to the image
+</ParamField>
+
+##### raw()
+
+Create an Image from raw image contents.
+
+```php
+Image::raw($imageContents, 'image/png')
+```
+
+<ParamField path="contents" type="string" required>
+  The raw image data
+</ParamField>
+
+<ParamField path="mime" type="string" required>
+  The MIME type of the image
+</ParamField>
+
+##### url()
+
+Create an Image from a URL.
+
+```php
+Image::url('https://example.com/image.jpg')
+```
+
+<ParamField path="url" type="string" required>
+  The URL of the image to fetch
+</ParamField>
+
+##### disk()
+
+Create an Image from a Laravel storage disk.
+
+```php
+Image::disk('s3', 'uploads/photo.jpg')
+```
+
+<ParamField path="disk" type="string" required>
+  The storage disk name
+</ParamField>
+
+<ParamField path="path" type="string" required>
+  The path on the disk
+</ParamField>
+
+##### base64()
+
+Create an Image from base64-encoded data.
+
+```php
+Image::base64($base64String, 'image/jpeg')
+```
+
+<ParamField path="base64" type="string" required>
+  The base64-encoded image data
+</ParamField>
+
+<ParamField path="mime" type="string" required>
+  The MIME type
+</ParamField>
+
+##### fromArray()
+
+Create from an array representation.
+
+```php
+Image::fromArray([
+    'source' => [
+        'type' => 'base64',
+        'media_type' => 'image/jpeg',
+        'data' => $base64Data
+    ]
+])
+```
+
+<ParamField path="data" type="array" required>
+  Array with source information
+</ParamField>
+
+#### Deprecated Methods
+
+The following methods are deprecated but still available:
+
+- `fromPath()` - Use `path()` instead
+- `fromContents()` - Use `raw()` instead
+- `fromUrl()` - Use `url()` instead
+- `fromDisk()` - Use `disk()` instead
+
+#### Usage Example
+
+```php
+$step = Step::user([
+    Text::make('What do you see in these images?'),
+    Image::path('/photos/image1.jpg'),
+    Image::url('https://example.com/image2.png')
+])
+```
+
+### ToolUse
+
+Represents a tool use request within a step message.
+
+**Location:** `src/Magic/Chat/Messages/Step/ToolUse.php:8`
+
+#### Constructor
+
+<ParamField path="call" type="ToolCall" required>
+  The ToolCall instance containing the tool name, arguments, and ID
+</ParamField>
+
+#### Static Methods
+
+##### call()
+
+Create a ToolUse from a ToolCall instance.
+
+```php
+$toolCall = new ToolCall(
+    name: 'search_database',
+    arguments: ['query' => 'users'],
+    id: 'call_123'
+);
+ToolUse::call($toolCall)
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The tool call to wrap
+</ParamField>
+
+##### make()
+
+Create a ToolUse with inline parameters.
+
+```php
+ToolUse::make(
+    name: 'get_weather',
+    arguments: ['city' => 'London'],
+    id: 'call_456'
+)
+```
+
+<ParamField path="name" type="string" required>
+  The name of the tool to use
+</ParamField>
+
+<ParamField path="arguments" type="array" default="[]">
+  The arguments to pass to the tool
+</ParamField>
+
+<ParamField path="id" type="string" default="null">
+  Optional unique identifier for the tool use
+</ParamField>
+
+##### fromArray()
+
+Create from an array representation.
+
+```php
+ToolUse::fromArray([
+    'call' => [
+        'name' => 'search',
+        'arguments' => ['q' => 'test'],
+        'id' => 'call_789'
+    ]
+])
+```
+
+<ParamField path="data" type="array" required>
+  Array with 'call' key containing ToolCall data
+</ParamField>
+
+#### Usage Example
+
+```php
+$step = Step::assistant([
+    Text::make('Let me search for that information.'),
+    ToolUse::make('search', ['query' => 'Laravel Magic'])
+])
+```
+
+### ToolResult
+
+Represents the result of a tool execution within a step message.
+
+**Location:** `src/Magic/Chat/Messages/Step/ToolResult.php:8`
+
+#### Constructor
+
+<ParamField path="call" type="ToolCall" required>
+  The original ToolCall that this result corresponds to
+</ParamField>
+
+<ParamField path="output" type="mixed" default="null">
+  The result of the tool execution (can be string, array, or other data)
+</ParamField>
+
+#### Static Methods
+
+##### output()
+
+Create a ToolResult with the execution output.
+
+```php
+ToolResult::output($toolCall, ['results' => [...]])
+```
+
+<ParamField path="call" type="ToolCall" required>
+  The original tool call
+</ParamField>
+
+<ParamField path="output" type="mixed" required>
+  The tool execution result
+</ParamField>
+
+##### fromArray()
+
+Create from an array representation.
+
+```php
+ToolResult::fromArray([
+    'call' => [
+        'name' => 'search',
+        'arguments' => ['q' => 'test'],
+        'id' => 'call_123'
+    ],
+    'output' => 'Search results...'
+])
+```
+
+<ParamField path="data" type="array" required>
+  Array with 'call' and 'output' keys
+</ParamField>
+
+#### Usage Example
+
+```php
+$step = Step::user([
+    ToolResult::output(
+        $toolCall,
+        'Found 5 results matching your query.'
+    )
+])
+```
+
+## Complete Example
+
+Here's a complete example showing how to use Steps with multiple content types:
+
+```php
+use Mateffy\Magic\Chat\Messages\Step;
+use Mateffy\Magic\Chat\Messages\Step\Text;
+use Mateffy\Magic\Chat\Messages\Step\Image;
+use Mateffy\Magic\Chat\Messages\Step\ToolUse;
+use Mateffy\Magic\Chat\Messages\Step\ToolResult;
+use Mateffy\Magic\Chat\Messages\ToolCall;
+
+// User sends a multi-modal message
+$userStep = Step::user([
+    Text::make('Can you analyze this product image and check inventory?'),
+    Image::path('/uploads/product.jpg')
+]);
+
+// Assistant responds with text and a tool use
+$assistantStep = Step::assistant([
+    Text::make('I can see the product. Let me check the inventory.'),
+    ToolUse::make('check_inventory', ['sku' => 'PROD-123'])
+]);
+
+// User provides tool result
+$toolCall = new ToolCall(
+    name: 'check_inventory',
+    arguments: ['sku' => 'PROD-123'],
+    id: 'call_001'
+);
+
+$resultStep = Step::user([
+    ToolResult::output($toolCall, ['in_stock' => true, 'quantity' => 45])
+]);
+
+// Assistant provides final response
+$finalStep = Step::assistant([
+    Text::make('The product is in stock with 45 units available.')
+]);
+```
+
+## Array Serialization
+
+All Step content types can be converted to and from arrays:
+
+```php
+$step = Step::user([
+    Text::make('Hello'),
+    Image::path('/image.jpg')
+]);
+
+$array = $step->toArray();
+// [
+//     'role' => 'user',
+//     'content' => [
+//         ['type' => 'text', 'text' => 'Hello'],
+//         ['type' => 'image', 'source' => [...]]
+//     ]
+// ]
+
+$restored = Step::fromArray($array);
+```

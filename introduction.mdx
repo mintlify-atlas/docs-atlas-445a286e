@@ -1,0 +1,84 @@
+---
+title: Introduction
+description: A PHP SDK to do magical things with LLMs using just a few lines of code
+---
+
+# Introduction to LLM Magic
+
+LLM Magic is a powerful PHP SDK for Laravel that enables you to work with Large Language Models (LLMs) using just a few lines of code. It provides a developer-friendly interface for interacting with multiple LLM providers and extracting structured data from various file formats.
+
+<Note>
+  This project is still in development and not yet publicly released. The API may change!
+</Note>
+
+## Key Features
+
+**Simple Question Answering**
+
+Ask questions and get instant answers with a single line of code using `Magic::ask()`.
+
+**Multi-Provider Support**
+
+Connect to multiple LLM providers including OpenAI, Anthropic, Google Gemini, Mistral, OpenRouter, TogetherAI, and more.
+
+**Advanced Chat Conversations**
+
+Build complex conversations with multi-modal inputs (text, images), tool calling, and streaming responses.
+
+**Structured Data Extraction**
+
+Extract validated JSON data from PDFs, Word documents, images, and other file formats with multiple extraction strategies.
+
+**Function Calling & Tools**
+
+Create custom tools and functions that LLMs can call during conversations, enabling dynamic interactions with your application.
+
+**Embeddings Support**
+
+Generate and work with text embeddings for semantic search, similarity matching, and more.
+
+**Streaming Responses**
+
+Stream LLM responses in real-time for better user experience.
+
+## Quick Example
+
+```php
+use Mateffy\Magic;
+
+// Simple question answering
+$answer = Magic::ask('What is the capital of France?');
+// -> "The capital of France is Paris."
+
+// Advanced chat with streaming
+$response = Magic::chat()
+    ->model('google/gemini-2.0-flash-lite')
+    ->prompt('What is the capital of France?')
+    ->stream()
+    ->text();
+```
+
+## Getting Started
+
+Explore the documentation to learn how to use LLM Magic in your Laravel application:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install LLM Magic via Composer and configure your environment
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with your first LLM interactions
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Configure models, API keys, and advanced settings
+  </Card>
+  <Card title="Chat API" icon="comments" href="/chat">
+    Learn about building conversations with LLMs
+  </Card>
+</CardGroup>
+
+## License
+
+LLM Magic is made by [Lukas Mateffy](https://mateffy.me) and is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://choosealicense.com/licenses/agpl-3.0/).
+
+For commercial licensing, please contact [hey@mateffy.me](mailto:hey@mateffy.me).

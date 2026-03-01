@@ -1,0 +1,611 @@
+---
+title: 'Creating Custom Extraction Strategies'
+description: 'Build custom strategies to optimize document extraction for your specific use cases'
+---
+
+## Overview
+
+Extraction strategies control how LLM Magic processes documents and extracts data. While built-in strategies cover most use cases, you can create custom strategies for specialized extraction workflows.
+
+## Strategy Interface
+
+All strategies must implement the `Strategy` interface from src/Magic/Extraction/Strategies/Strategy.php:
+
+```php
+namespace Mateffy\Magic\Extraction\Strategies;
+
+use Closure;
+use Mateffy\Magic\Chat\ActorTelemetry;
+use Mateffy\Magic\Chat\Messages\Message;
+use Mateffy\Magic\Chat\TokenStats;
+use Mateffy\Magic\Extraction\Artifacts\Artifact;
+use Mateffy\Magic\Extraction\ContextOptions;
+use Mateffy\Magic\Models\LLM;
+
+interface Strategy
+{
+    public static function make(
+        LLM $llm,
+        ContextOptions $contextOptions,
+        ?string $outputInstructions,
+        array $schema,
+        int $chunkSize,
+        ?Closure $onDataProgress,
+        ?Closure $onTokenStats = null,
+        ?Closure $onMessageProgress = null,
+        ?Closure $onMessage = null,
+        ?Closure $onActorTelemetry = null,
+    ): static;
+
+    public static function getLabel(): string;
+
+    /**
+     * @param Artifact[] $artifacts
+     */
+    public function getEstimatedSteps(array $artifacts): int;
+
+    /**
+     * @param Artifact[] $artifacts
+     */
+    public function run(array $artifacts): array;
+}
+```
+
+## Required Methods
+
+<Steps>
+  <Step title="make() - Factory Method">
+    Static factory method that creates an instance of your strategy:
+
+    ```php
+    public static function make(
+        LLM $llm,
+        ContextOptions $contextOptions,
+        ?string $outputInstructions,
+        array $schema,
+        int $chunkSize,
+        ?Closure $onDataProgress,
+        ?Closure $onTokenStats = null,
+        ?Closure $onMessageProgress = null,
+        ?Closure $onMessage = null,
+        ?Closure $onActorTelemetry = null,
+    ): static {
+        return new static(
+            llm: $llm,
+            contextOptions: $contextOptions,
+            outputInstructions: $outputInstructions,
+            schema: $schema,
+            chunkSize: $chunkSize,
+            onDataProgress: $onDataProgress,
+            onTokenStats: $onTokenStats,
+            onMessageProgress: $onMessageProgress,
+            onMessage: $onMessage,
+            onActorTelemetry: $onActorTelemetry,
+        );
+    }
+    ```
+  </Step>
+
+  <Step title="getLabel() - Display Name">
+    Return a human-readable label for your strategy:
+
+    ```php
+    public static function getLabel(): string
+    {
+        return __('Custom Strategy');
+    }
+    ```
+  </Step>
+
+  <Step title="getEstimatedSteps() - Progress Tracking">
+    Calculate the number of LLM calls required:
+
+    ```php
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+        return $batches->count();
+    }
+    ```
+  </Step>
+
+  <Step title="run() - Main Extraction Logic">
+    Execute the extraction and return the data:
+
+    ```php
+    public function run(array $artifacts): array
+    {
+        // Your extraction logic
+        return $extractedData;
+    }
+    ```
+  </Step>
+</Steps>
+
+## Built-In Strategy Examples
+
+### SimpleStrategy
+
+From src/Magic/Extraction/Strategies/SimpleStrategy.php, the simplest strategy that processes only the first chunk:
+
+```php
+class SimpleStrategy extends Extractor
+{
+    public function run(array $artifacts): array
+    {
+        // Only use the first batch
+        [$limitedArtifacts] = $this->getBatches(artifacts: $artifacts);
+
+        $prompt = new ExtractorPrompt(
+            extractor: $this,
+            artifacts: $limitedArtifacts->all(),
+            contextOptions: $this->contextOptions
+        );
+
+        $threadId = $this->createActorThread(llm: $this->llm, prompt: $prompt);
+
+        return $this->send(threadId: $threadId, llm: $this->llm, prompt: $prompt);
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Simple');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return 1;
+    }
+}
+```
+
+### SequentialStrategy
+
+From src/Magic/Extraction/Strategies/SequentialStrategy.php, processes batches one after another:
+
+```php
+class SequentialStrategy extends Extractor
+{
+    use GenerateWithBatchedPrompt;
+
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+
+        $data = null;
+
+        foreach ($batches as $batch) {
+            $data = $this->generate($batch, $data);
+        }
+
+        $this->logDataProgress(data: $data);
+
+        return $data;
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Sequential');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return $this->getBatches(artifacts: $artifacts)->count();
+    }
+}
+```
+
+### ParallelStrategy
+
+From src/Magic/Extraction/Strategies/ParallelStrategy.php, processes batches concurrently:
+
+```php
+class ParallelStrategy extends Extractor
+{
+    use GenerateWithBatchedPrompt;
+    use SupportsConcurrency;
+
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+
+        $dataList = $this->runConcurrently(
+            batches: $batches,
+            execute: fn(Collection $artifacts) => $this->generate($artifacts)
+        );
+
+        $data = $this->mergeWithLlm($dataList->all());
+
+        $this->logDataProgress(data: $data);
+
+        return $data;
+    }
+
+    protected function mergeWithLlm(array $dataList): ?array
+    {
+        $prompt = new ParallelMergerPrompt(extractor: $this, datas: $dataList);
+
+        $threadId = $this->createActorThread(llm: $this->llm, prompt: $prompt);
+
+        return $this->send(
+            threadId: $threadId,
+            llm: $this->llm,
+            prompt: $prompt
+        );
+    }
+
+    public static function getLabel(): string
+    {
+        return __('Parallel');
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        // Add one for the merge step
+        return $this->getBatches(artifacts: $artifacts)->count() + 1;
+    }
+}
+```
+
+## Creating a Custom Strategy
+
+<Steps>
+  <Step title="Extend the Extractor base class">
+    Create your strategy class:
+
+    ```php
+    namespace App\Magic\Strategies;
+
+    use Mateffy\Magic\Extraction\Strategies\Extractor;
+
+    class CustomStrategy extends Extractor
+    {
+        // Your implementation
+    }
+    ```
+  </Step>
+
+  <Step title="Implement the run method">
+    Add your extraction logic:
+
+    ```php
+    public function run(array $artifacts): array
+    {
+        // Step 1: Split artifacts into batches
+        $batches = $this->getBatches(artifacts: $artifacts);
+        
+        // Step 2: Process each batch
+        $results = [];
+        foreach ($batches as $batch) {
+            $results[] = $this->processBatch($batch);
+        }
+        
+        // Step 3: Combine results
+        $finalData = $this->combineResults($results);
+        
+        // Step 4: Report progress
+        $this->logDataProgress(data: $finalData);
+        
+        return $finalData;
+    }
+    ```
+  </Step>
+
+  <Step title="Add helper methods">
+    ```php
+    protected function processBatch($batch): array
+    {
+        $prompt = new ExtractorPrompt(
+            extractor: $this,
+            artifacts: $batch->all(),
+            contextOptions: $this->contextOptions
+        );
+
+        $threadId = $this->createActorThread(
+            llm: $this->llm,
+            prompt: $prompt
+        );
+
+        return $this->send(
+            threadId: $threadId,
+            llm: $this->llm,
+            prompt: $prompt
+        );
+    }
+
+    protected function combineResults(array $results): array
+    {
+        // Your merging logic
+        return array_merge(...$results);
+    }
+    ```
+  </Step>
+
+  <Step title="Implement required methods">
+    ```php
+    public static function getLabel(): string
+    {
+        return 'Custom Strategy';
+    }
+
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return $this->getBatches(artifacts: $artifacts)->count();
+    }
+    ```
+  </Step>
+</Steps>
+
+## Registering Your Strategy
+
+From src/Magic.php:225, register your custom strategy:
+
+```php
+use Mateffy\Magic;
+use App\Magic\Strategies\CustomStrategy;
+
+Magic::registerStrategy('custom', CustomStrategy::class);
+```
+
+Now you can use it:
+
+```php
+$data = Magic::extract()
+    ->strategy('custom')
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->send();
+```
+
+## Available Helper Methods
+
+The `Extractor` base class provides useful methods:
+
+### getBatches()
+
+Split artifacts into chunks:
+
+```php
+$batches = $this->getBatches(artifacts: $artifacts);
+// Returns: Collection of artifact batches based on chunkSize
+```
+
+### createActorThread()
+
+Create a new LLM conversation thread:
+
+```php
+$threadId = $this->createActorThread(
+    llm: $this->llm,
+    prompt: $prompt
+);
+```
+
+### send()
+
+Send a prompt and get extracted data:
+
+```php
+$data = $this->send(
+    threadId: $threadId,
+    llm: $this->llm,
+    prompt: $prompt
+);
+```
+
+### logDataProgress()
+
+Trigger the data progress callback:
+
+```php
+$this->logDataProgress(data: $partialData);
+```
+
+## Advanced Patterns
+
+### Concurrent Processing
+
+Use the `SupportsConcurrency` trait:
+
+```php
+use Mateffy\Magic\Extraction\Strategies\Concerns\SupportsConcurrency;
+
+class ParallelCustomStrategy extends Extractor
+{
+    use SupportsConcurrency;
+
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+
+        $results = $this->runConcurrently(
+            batches: $batches,
+            execute: fn($batch) => $this->processBatch($batch)
+        );
+
+        return $this->mergeResults($results->all());
+    }
+}
+```
+
+### Multi-Pass Extraction
+
+Implement multiple extraction passes for higher accuracy:
+
+```php
+public function run(array $artifacts): array
+{
+    // First pass: Extract raw data
+    $rawData = $this->firstPass($artifacts);
+    
+    // Second pass: Refine and validate
+    $refinedData = $this->secondPass($rawData, $artifacts);
+    
+    return $refinedData;
+}
+```
+
+### Custom Merging Logic
+
+Implement domain-specific merging:
+
+```php
+protected function smartMerge(array $dataList): array
+{
+    $merged = [];
+    
+    foreach ($dataList as $data) {
+        // Custom merging logic based on your schema
+        $merged = array_merge_recursive($merged, $data);
+    }
+    
+    return $merged;
+}
+```
+
+## Progress Callbacks
+
+Use callbacks to track extraction progress:
+
+### Token Stats
+
+```php
+if ($this->onTokenStats) {
+    ($this->onTokenStats)($tokenStats);
+}
+```
+
+### Data Progress
+
+```php
+if ($this->onDataProgress) {
+    ($this->onDataProgress)($partialData);
+}
+```
+
+### Message Progress
+
+```php
+if ($this->onMessageProgress) {
+    ($this->onMessageProgress)($message);
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Strategy Design">
+    - Extend `Extractor` base class for helper methods
+    - Use batching for large documents
+    - Implement progress callbacks
+    - Consider memory usage with large datasets
+  </Accordion>
+
+  <Accordion title="Performance">
+    - Use concurrent processing for independent batches
+    - Optimize chunk size for your documents
+    - Cache intermediate results when possible
+    - Monitor token usage
+  </Accordion>
+
+  <Accordion title="Accuracy">
+    - Consider multi-pass strategies for complex data
+    - Implement smart merging logic
+    - Validate extracted data against schema
+    - Use appropriate prompts for your domain
+  </Accordion>
+
+  <Accordion title="Testing">
+    - Test with various document sizes
+    - Validate against expected schemas
+    - Test error handling
+    - Benchmark against built-in strategies
+  </Accordion>
+</AccordionGroup>
+
+## Example: Priority-Based Strategy
+
+Here's a complete example of a custom strategy that processes high-priority sections first:
+
+```php
+namespace App\Magic\Strategies;
+
+use Mateffy\Magic\Extraction\Strategies\Extractor;
+use Mateffy\Magic\Chat\Prompt\ExtractorPrompt;
+
+class PriorityStrategy extends Extractor
+{
+    public function run(array $artifacts): array
+    {
+        $batches = $this->getBatches(artifacts: $artifacts);
+        
+        // Sort batches by priority (assuming artifacts have priority metadata)
+        $sortedBatches = $batches->sortByDesc(function ($batch) {
+            return $batch->max(fn($artifact) => $artifact->metadata['priority'] ?? 0);
+        });
+        
+        $data = [];
+        
+        foreach ($sortedBatches as $batch) {
+            $prompt = new ExtractorPrompt(
+                extractor: $this,
+                artifacts: $batch->all(),
+                contextOptions: $this->contextOptions
+            );
+            
+            $threadId = $this->createActorThread(
+                llm: $this->llm,
+                prompt: $prompt
+            );
+            
+            $batchData = $this->send(
+                threadId: $threadId,
+                llm: $this->llm,
+                prompt: $prompt
+            );
+            
+            $data = array_merge_recursive($data, $batchData);
+            $this->logDataProgress(data: $data);
+        }
+        
+        return $data;
+    }
+    
+    public static function getLabel(): string
+    {
+        return 'Priority-Based Extraction';
+    }
+    
+    public function getEstimatedSteps(array $artifacts): int
+    {
+        return $this->getBatches(artifacts: $artifacts)->count();
+    }
+}
+```
+
+Register and use:
+
+```php
+Magic::registerStrategy('priority', PriorityStrategy::class);
+
+$data = Magic::extract()
+    ->strategy('priority')
+    ->schema($schema)
+    ->artifacts($artifacts)
+    ->send();
+```
+
+<Warning>
+  Custom strategies have full access to the LLM and can incur significant token costs. Always test with small documents first.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Document Extraction" icon="file" href="/guides/document-extraction">
+    Learn more about extraction fundamentals
+  </Card>
+  <Card title="Custom Tools" icon="wrench" href="/guides/custom-tools">
+    Build custom tools for chat interactions
+  </Card>
+</CardGroup>
